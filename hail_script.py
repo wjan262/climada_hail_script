@@ -25,8 +25,8 @@ import h5py
 
 # Parameter
 load_exp_with_h5py = True
-plot_img = True
-ev_list = ["01/07/2019", "02/07/2019"]#, "01/07/2019", "18/06/2019"]
+plot_img = False
+ev_list = [] #["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
 start_day = 0 #min = 0
 end_day = 183 #max = 183
 
@@ -133,22 +133,37 @@ ifset_hail.append(if_hail)
 
 # Set exposure: (see tutorial climada_entity_LitPop)
 if load_exp_with_h5py:
+    # LitPop Exposure
     exp_hail = LitPop()
-    exp_hail.read_hdf5("exp_switzerland.hdf5")
-else:
+    exp_hail.read_hdf5(input_folder +"/exp_switzerland.hdf5")
+    exp_hail.check()
+    #Agrar Exposure    
+    exp_agr = Exposures()
+    exp_agr.read_hdf5(input_folder + "/exp_agr.hdf5")
+    exp_agr.check()
+else: #be carefull, this step will take ages when you do both at once
+    # LitPop Exposure
     exp_hail = LitPop()
     exp_hail.set_country('Switzerland', reference_year = 2019)
     exp_hail.set_geometry_points()
     exp_hail = exp_hail.rename(columns = {'if_': 'if_HL'})
     exp_hail = Exposures(exp_hail)
     exp_hail.set_lat_lon()
-    exp_hail.write_hdf5("exp_switzerland.hdf5")
+    exp_hail.check()
+    exp_hail.assign_centroids(haz_hail, method = "NN", distance ="haversine", threshold = 2)
+    exp_hail.write_hdf5(input_folder + "/exp_switzerland.hdf5")
+    # Agrar Exposure
+    exp_agr = Exposures()
+    exp_agr.read_hdf5(input_folder + "/exp_hail_agr.hdf5")
+    exp_agr.check()
+    exp_agr.assign_centroids(haz_hail, method = "NN", distance = "haversine", threshold = 2)
+    exp_agr.write_hdf5("exp_agr.hdf5")
 
-exp_hail.check()
 
 if plot_img:    
     exp_hail.plot_basemap()
-exp_hail.assign_centroids(haz_hail, method = "NN", distance ="haversine", threshold = 2)
+    #This takes to long. Do over night!!!
+    #exp_agr.plot_basemap()
 
 imp_hail = Impact()
 imp_hail.calc(exp_hail, ifset_hail, haz_hail,save_mat=True)
@@ -160,3 +175,12 @@ for ev_name in ev_list:
 
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
+
+
+
+
+
+
+
+
+
