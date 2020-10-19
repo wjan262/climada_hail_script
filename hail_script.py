@@ -45,16 +45,35 @@ def get_hail_data(years,
                   start_time=0,
                   end_time=183,
                   chunk_size = 100000):
-    #get all the days one by one to convert them from xr to sparse.
-    #this has to be done for the days seperatly since doint them all at once 
-    #would consume to much memory.
-    # start_time 
-    # end_time
-    # files List of files
-    # input_folder path to input data
-    # years list with years to load
-    # fraction and intensity for all the years
-    #Load Data in Chunks:
+    """
+
+    Parameters
+    ----------
+    years : list of int
+        List containing years to import radar data from.
+    input_folder : str
+        Path to folder containing radar data files
+    start_time : int, optional
+        first day read from yearly data. The default is 0 which corresponds to '01/04/2019'.
+    end_time : int, optional
+        last day read from yearly data. The default is 183 which corresponds to '30/09/2019'.
+    chunk_size : int, optional
+        chunk size to load data using xarray. The default is 100000.
+
+    Returns
+    -------
+    fraction : scipy.sparse.csr.csr_matrix
+        scipy sparse matrix containing the fraction for each event (a day is an event).
+    intensity : scipy.sparse.csr.csr_matrix
+        scipy sparse matrix containing the intensity for each event (a day is an event).
+    event_name : list of str
+        name for each event (date as string '01/04/2019').
+    lat : numpy.ndarray
+        array containing latitude for each point.
+    lon : numpy.ndarray
+        array containing longitude for each point.
+
+    """
     fraction = None
     intensity = None
     lat = None
@@ -86,12 +105,42 @@ def get_hail_data(years,
         xr_poh.close()
         xr_meshs.close()
     return fraction, intensity, event_name, lat, lon
-def mdd_function():
+
+def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
+    """
+    
+
+    Parameters
+    ----------
+    max_y : float, optional
+        max value for mdd. The default is 0.1.
+    middle_x : int, optional
+        specifies x location of the function. The default is 90.
+    width : TYPE, optional
+        specifies the extent in x direciton of the function. The default is 100.
+    plot_y : bool, optional
+        plot y. The default is False.
+
+    Returns
+    -------
+    y : numpy.ndarray
+        for impact function mdd.
+
+    """
+    if width/2 > middle_x:
+        print("Changed middle_x form {} to width/2 {}".format(middle_x, width/2))
+        middle_x = int(width/2)
     y = np.zeros(245)
-    x = np.linspace(-6, 6, num=100)
-    y[40:140] = 1/(1+np.exp(-x))
-    y[140:] = 1.
+    x = np.linspace(-6, 6, num=width)
+    start_sig = int(middle_x - width/2)
+    end_sig = start_sig + width
+    y[start_sig:end_sig] = 1/(1+np.exp(-x))
+    y[end_sig:] = 1.
+    y = y * max_y
+    if plot_y:
+        plt.plot(y)
     return y
+
 haz_type = "HL"
 haz_hail = Hazard(haz_type)
 haz_hail.units = "mm"
@@ -120,7 +169,7 @@ if_hail.id = 1
 if_hail.name = 'LS Linear function'
 if_hail.intensity_unit = 'mm'
 if_hail.intensity = np.linspace(0, 244, num=245)
-if_hail.mdd = mdd_function()/10
+if_hail.mdd = mdd_function(max_y = 0.1, middle_x = 90, width = 100)
 if_hail.paa = np.linspace(0, 1, num=245)
 if_hail.check()
 if plot_img:
@@ -163,24 +212,21 @@ else: #be carefull, this step will take ages when you do both at once
 if plot_img:    
     exp_hail.plot_basemap()
     #This takes to long. Do over night!!!
-    #exp_agr.plot_basemap()
+    #exp_agr.plot_basemap() 
 
 imp_hail = Impact()
 imp_hail.calc(exp_hail, ifset_hail, haz_hail,save_mat=True)
-imp_hail.plot_raster_eai_exposure()
+# imp_hail.plot_raster_eai_exposure()
 
-for ev_name in ev_list:
-    imp_hail.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
+# for ev_name in ev_list:
+#     imp_hail.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
 
 
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
 
-
-
-
-
-
-
-
+#Secret test chamber pssst
+if True:
+    imp_agr = Impact()
+    imp_agr.calc(exp_agr, ifset_hail, haz_hail)
 
