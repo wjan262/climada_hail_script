@@ -29,6 +29,12 @@ plot_img = False
 ev_list = [] #["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
 start_day = 0 #min = 0
 end_day = 183 #max = 183
+imp_fun_infrastructure = {"imp_id": 1, "max_y": 0.1, "middle_x": 90, "width": 100}
+imp_fun_grape = {"imp_id": 2, "max_y": 0.8, "middle_x": 45, "width": 50}
+imp_fun_fruit = {"imp_id": 3, "max_y": 0.5, "middle_x": 45, "width": 50}
+imp_fun_agriculture = {"imp_id": 4, "max_y": 0.5, "middle_x": 45, "width": 50}
+
+imp_fun_parameter = [imp_fun_infrastructure, imp_fun_grape, imp_fun_fruit, imp_fun_agriculture]
 
 
 # Path to Data 
@@ -39,6 +45,18 @@ years = ["2019"]
 path_poh = "hail_log_data/BZC_X1d66_V2_2019.nc"
 path_meshs = "hail_log_data/MZC_X1d66_V2_2019.nc"
 
+def create_impact_func(haz_type, imp_id, max_y, middle_x, width):
+    name = {1: "Hail on infrastructure", 2: "Hail on grape production", 3: "Hail on fruit production", 4: "Hail on agriculture (without fruits and grape production"}
+    imp_fun= ImpactFunc() 
+    imp_fun.haz_type = haz_type
+    imp_fun.id = imp_id
+    imp_fun.name = name[imp_id]
+    imp_fun.intensity_unit = 'mm'
+    imp_fun.intensity = np.linspace(0, 244, num=245)
+    imp_fun.mdd = mdd_function(max_y, middle_x, width)
+    imp_fun.paa = np.linspace(0, 1, num=245)
+    imp_fun.check()
+    return imp_fun
 
 def get_hail_data(years,
                   input_folder,
@@ -137,6 +155,7 @@ def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
     y[start_sig:end_sig] = 1/(1+np.exp(-x))
     y[end_sig:] = 1.
     y = y * max_y
+    y[0:20]=0 #values under 20 do not exist in MESHS
     if plot_y:
         plt.plot(y)
     return y
@@ -163,19 +182,28 @@ if plot_img:
     haz_hail.plot_fraction(event = 0)
 
 # Set impact function (see tutorial climada_entity_ImpactFuncSet)
-if_hail = ImpactFunc() 
-if_hail.haz_type = haz_type
-if_hail.id = 1
-if_hail.name = 'LS Linear function'
-if_hail.intensity_unit = 'mm'
-if_hail.intensity = np.linspace(0, 244, num=245)
-if_hail.mdd = mdd_function(max_y = 0.1, middle_x = 90, width = 100)
-if_hail.paa = np.linspace(0, 1, num=245)
-if_hail.check()
-if plot_img:
-    if_hail.plot()
 ifset_hail = ImpactFuncSet()
-ifset_hail.append(if_hail)
+for imp_fun_dict in imp_fun_parameter:
+    imp_fun = create_impact_func(haz_type, 
+                                 imp_fun_dict["imp_id"], 
+                                 imp_fun_dict["max_y"], 
+                                 imp_fun_dict["middle_x"], 
+                                 imp_fun_dict["width"])
+    ifset_hail.append(imp_fun)
+
+# if_hail = ImpactFunc() 
+# if_hail.haz_type = haz_type
+# if_hail.id = 1
+# if_hail.name = 'LS Linear function'
+# if_hail.intensity_unit = 'mm'
+# if_hail.intensity = np.linspace(0, 244, num=245)
+# if_hail.mdd = mdd_function(max_y = 0.1, middle_x = 90, width = 100)
+# if_hail.paa = np.linspace(0, 1, num=245)
+# if_hail.check()
+# if plot_img:
+#     if_hail.plot()
+# ifset_hail = ImpactFuncSet()
+# ifset_hail.append(if_hail)
 
 
 
@@ -204,9 +232,14 @@ else: #be carefull, this step will take ages when you do both at once
     # Agrar Exposure
     exp_agr = Exposures()
     exp_agr.read_hdf5(input_folder + "/exp_hail_agr.hdf5")
+    # exp_agr.loc[exp_agr["region_id"]==201, "if_"]= int(3)
+    # exp_agr.loc[exp_agr["region_id"]==202, "if_"]= int(2)
+    # exp_agr.loc[exp_agr["region_id"]==221, "if_"]= int(4)
+    # exp_agr = exp_agr.rename(columns = {'if_': 'if_HL'})
+
     exp_agr.check()
     exp_agr.assign_centroids(haz_hail, method = "NN", distance = "haversine", threshold = 2)
-    exp_agr.write_hdf5("exp_agr.hdf5")
+    exp_agr.write_hdf5(input_folder + "/exp_agr.hdf5")
 
 
 if plot_img:    
