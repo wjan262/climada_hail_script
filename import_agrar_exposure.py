@@ -112,8 +112,10 @@ c = exp_hail_agr[exp_hail_agr["region_id"]==221].assign(value = avg_value_ackerb
 
 exp_hail_agr = pd.concat([a,b,c]).sort_index()
 exp_hail_agr = Exposures(exp_hail_agr)
+
 exp_hail_agr.check()
 exp_hail_agr.head()
+
 exp_hail_agr.write_hdf5("exp_hail_agr.hdf5")
 
 test = exp_hail_agr[exp_hail_agr["value"]>0]

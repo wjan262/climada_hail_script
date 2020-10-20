@@ -26,7 +26,7 @@ import h5py
 # Parameter
 load_exp_with_h5py = True
 plot_img = False
-ev_list = [] #["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
+ev_list = []#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
 start_day = 0 #min = 0
 end_day = 183 #max = 183
 imp_fun_infrastructure = {"imp_id": 1, "max_y": 0.1, "middle_x": 90, "width": 100}
@@ -110,15 +110,16 @@ def get_hail_data(years,
 
         for i in range(start_time, end_time):
             df_poh = xr_poh.sel(time = xr_poh.time[i]).to_dataframe() #get the data by day
+            df_poh["BZC"] = np.where(df_poh["BZC"] >= 80, 1, 0) #this is a test
             df_meshs = xr_meshs.sel(time = xr_meshs.time[i]).to_dataframe()
             csr_poh = sparse.csr_matrix(df_poh["BZC"].fillna(value=0))
             csr_meshs = sparse.csr_matrix(df_meshs["MZC"].fillna(value=0))
             event_name.append(df_poh.time[0].strftime("%d/%m/%Y"))
             if fraction is None: #first iteration        
-                fraction = csr_poh/100 #0-100%
+                fraction = csr_poh #0-100%
                 intensity = csr_meshs #20-244mm
             else: #all the following iteration get append.
-                fraction = sparse.vstack([fraction, csr_poh/100])
+                fraction = sparse.vstack([fraction, csr_poh])
                 intensity = sparse.vstack([intensity, csr_meshs])
         xr_poh.close()
         xr_meshs.close()
@@ -261,5 +262,7 @@ print("I'm done with the script")
 #Secret test chamber pssst
 if True:
     imp_agr = Impact()
-    imp_agr.calc(exp_agr, ifset_hail, haz_hail)
+    imp_agr.calc(exp_agr, ifset_hail, haz_hail, save_mat = True)
+    for ev_name in ev_list:
+        imp_agr.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
 
