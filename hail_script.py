@@ -22,28 +22,29 @@ from climada.entity import Exposures, Entity, LitPop
 from climada.entity import ImpactFuncSet, ImpactFunc
 from climada.engine import Impact
 import h5py
-
 # Parameter
 load_exp_with_h5py = True
+load_haz_with_hdf5 = True
 plot_img = False
+haz_type = "HL"
 ev_list = []#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
 start_day = 0 #min = 0
 end_day = 183 #max = 183
-imp_fun_infrastructure = {"imp_id": 1, "max_y": 0.1, "middle_x": 90, "width": 100}
-imp_fun_grape = {"imp_id": 2, "max_y": 0.8, "middle_x": 45, "width": 50}
-imp_fun_fruit = {"imp_id": 3, "max_y": 0.5, "middle_x": 45, "width": 50}
-imp_fun_agriculture = {"imp_id": 4, "max_y": 0.5, "middle_x": 45, "width": 50}
+imp_fun_infrastructure = {"imp_id": 1, "max_y": 0.1, "middle_x": 100, "width": 100}
+imp_fun_grape = {"imp_id": 2, "max_y": 0.8, "middle_x": 35, "width": 50}
+imp_fun_fruit = {"imp_id": 3, "max_y": 1.0, "middle_x": 80, "width": 150}
+imp_fun_agriculture = {"imp_id": 4, "max_y": 0.5, "middle_x": 50, "width": 100}
 
 imp_fun_parameter = [imp_fun_infrastructure, imp_fun_grape, imp_fun_fruit, imp_fun_agriculture]
 
 
 # Path to Data 
 #Todo Make path absolute (input und result folder)
-input_folder = "~/Documents/ETH/Masterarbeit/input"
+input_folder = "/home/jan/Documents/ETH/Masterarbeit/input"
 results_folder = "~/Documents/ETH/Masterarbeit/results"
-years = ["2019"]
-path_poh = "hail_log_data/BZC_X1d66_V2_2019.nc"
-path_meshs = "hail_log_data/MZC_X1d66_V2_2019.nc"
+years = ["2002", "2003", "2004","2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018","2019"]
+# path_poh = "hail_log_data/BZC_X1d66_V2_2019.nc"
+# path_meshs = "hail_log_data/MZC_X1d66_V2_2019.nc"
 
 def create_impact_func(haz_type, imp_id, max_y, middle_x, width):
     name = {1: "Hail on infrastructure", 2: "Hail on grape production", 3: "Hail on fruit production", 4: "Hail on agriculture (without fruits and grape production"}
@@ -54,7 +55,7 @@ def create_impact_func(haz_type, imp_id, max_y, middle_x, width):
     imp_fun.intensity_unit = 'mm'
     imp_fun.intensity = np.linspace(0, 244, num=245)
     imp_fun.mdd = mdd_function(max_y, middle_x, width)
-    imp_fun.paa = np.linspace(0, 1, num=245)
+    imp_fun.paa = np.linspace(1, 1, num=245)
     imp_fun.check()
     return imp_fun
 
@@ -97,6 +98,7 @@ def get_hail_data(years,
     lat = None
     lon = None
     event_name = []
+    date = np.ndarray(0)
     for year in years:
         xr_poh = xr.open_dataset(
             input_folder + "/" + "BZC_X1d66_V2_" + year + ".nc",
@@ -115,6 +117,7 @@ def get_hail_data(years,
             csr_poh = sparse.csr_matrix(df_poh["BZC"].fillna(value=0))
             csr_meshs = sparse.csr_matrix(df_meshs["MZC"].fillna(value=0))
             event_name.append(df_poh.time[0].strftime("%d/%m/%Y"))
+            date = np.append(date, df_poh.time[0].toordinal())
             if fraction is None: #first iteration        
                 fraction = csr_poh #0-100%
                 intensity = csr_meshs #20-244mm
@@ -123,7 +126,7 @@ def get_hail_data(years,
                 intensity = sparse.vstack([intensity, csr_meshs])
         xr_poh.close()
         xr_meshs.close()
-    return fraction, intensity, event_name, lat, lon
+    return fraction, intensity, event_name, lat, lon, date
 
 def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
     """
@@ -161,21 +164,23 @@ def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
         plt.plot(y)
     return y
 
-haz_type = "HL"
-haz_hail = Hazard(haz_type)
-haz_hail.units = "mm"
-haz_hail.fraction, haz_hail.intensity, haz_hail.event_name, lat, lon = get_hail_data(
-    years = years, 
-    input_folder = input_folder, 
-    start_time=start_day, 
-    end_time=end_day)
-
-#set coordinates
-haz_hail.centroids.set_lat_lon(lat, lon)
-
-haz_hail.event_id = np.arange(haz_hail.intensity.shape[0], dtype = int) + 1
-#set frequency for all events to 1
-haz_hail.frequency = np.ones(haz_hail.intensity.shape[0])
+if load_haz_with_hdf5:
+    haz_hail = Hazard()
+    haz_hail.read_hdf5(input_folder + "/haz_hail.hdf5")
+else:
+    haz_hail = Hazard(haz_type)
+    haz_hail.units = "mm"
+    haz_hail.fraction, haz_hail.intensity, haz_hail.event_name, lat, lon, haz_hail.date = get_hail_data(
+        years = years,  
+        input_folder = input_folder, 
+        start_time=start_day,  
+        end_time=end_day)
+    haz_hail.intensity_thres = 20
+    #set coordinates
+    haz_hail.centroids.set_lat_lon(lat, lon)
+    haz_hail.event_id = np.arange(haz_hail.intensity.shape[0], dtype = int) + 1
+    #set frequency for all events to 1
+    haz_hail.frequency = np.ones(haz_hail.intensity.shape[0])/len(years)
 haz_hail.check()
 
 if plot_img:
@@ -252,9 +257,9 @@ imp_hail = Impact()
 imp_hail.calc(exp_hail, ifset_hail, haz_hail,save_mat=True)
 # imp_hail.plot_raster_eai_exposure()
 
-# for ev_name in ev_list:
-#     imp_hail.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
-
+for ev_name in ev_list:
+    imp_hail.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
+#     # plt.show()
 
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
@@ -263,6 +268,8 @@ print("I'm done with the script")
 if True:
     imp_agr = Impact()
     imp_agr.calc(exp_agr, ifset_hail, haz_hail, save_mat = True)
+    print("dmg litpop {} Mio CHF, dmg agr {} Mio CHF".format(imp_hail.aai_agg/1e6, imp_agr.aai_agg/1e6))
     for ev_name in ev_list:
         imp_agr.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
 
+# imp_agr.plot_raster_eai_exposure(raster_res = 0.008333333333325754)
