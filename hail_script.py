@@ -6,7 +6,7 @@ Created on Tue Sep 29 13:54:40 2020
 @author: jan
 """
 
-
+#%% Import
 import sys
 sys.path.append("/home/jan/Documents/ETH/Masterarbeit/climada_python")
 import numpy as np
@@ -22,7 +22,8 @@ from climada.entity import Exposures, Entity, LitPop
 from climada.entity import ImpactFuncSet, ImpactFunc
 from climada.engine import Impact
 import h5py
-# Parameter
+
+#%% Parameter
 load_exp_with_h5py = True
 load_haz_with_hdf5 = True
 plot_img = False
@@ -34,10 +35,7 @@ imp_fun_infrastructure = {"imp_id": 1, "max_y": 0.1, "middle_x": 100, "width": 1
 imp_fun_grape = {"imp_id": 2, "max_y": 0.8, "middle_x": 35, "width": 50}
 imp_fun_fruit = {"imp_id": 3, "max_y": 1.0, "middle_x": 80, "width": 150}
 imp_fun_agriculture = {"imp_id": 4, "max_y": 0.5, "middle_x": 50, "width": 100}
-
 imp_fun_parameter = [imp_fun_infrastructure, imp_fun_grape, imp_fun_fruit, imp_fun_agriculture]
-
-
 # Path to Data 
 #Todo Make path absolute (input und result folder)
 input_folder = "/home/jan/Documents/ETH/Masterarbeit/input"
@@ -46,6 +44,7 @@ years = ["2002", "2003", "2004","2005", "2006", "2007", "2008", "2009", "2010", 
 # path_poh = "hail_log_data/BZC_X1d66_V2_2019.nc"
 # path_meshs = "hail_log_data/MZC_X1d66_V2_2019.nc"
 
+#%% Functions
 def create_impact_func(haz_type, imp_id, max_y, middle_x, width):
     name = {1: "Hail on infrastructure", 2: "Hail on grape production", 3: "Hail on fruit production", 4: "Hail on agriculture (without fruits and grape production"}
     imp_fun= ImpactFunc() 
@@ -164,6 +163,7 @@ def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
         plt.plot(y)
     return y
 
+#%% Hazard
 if load_haz_with_hdf5:
     haz_hail = Hazard()
     haz_hail.read_hdf5(input_folder + "/haz_hail.hdf5")
@@ -187,6 +187,7 @@ if plot_img:
     haz_hail.plot_intensity(event = 0)
     haz_hail.plot_fraction(event = 0)
 
+#%% Impact_function
 # Set impact function (see tutorial climada_entity_ImpactFuncSet)
 ifset_hail = ImpactFuncSet()
 for imp_fun_dict in imp_fun_parameter:
@@ -197,44 +198,29 @@ for imp_fun_dict in imp_fun_parameter:
                                  imp_fun_dict["width"])
     ifset_hail.append(imp_fun)
 
-# if_hail = ImpactFunc() 
-# if_hail.haz_type = haz_type
-# if_hail.id = 1
-# if_hail.name = 'LS Linear function'
-# if_hail.intensity_unit = 'mm'
-# if_hail.intensity = np.linspace(0, 244, num=245)
-# if_hail.mdd = mdd_function(max_y = 0.1, middle_x = 90, width = 100)
-# if_hail.paa = np.linspace(0, 1, num=245)
-# if_hail.check()
-# if plot_img:
-#     if_hail.plot()
-# ifset_hail = ImpactFuncSet()
-# ifset_hail.append(if_hail)
 
-
-
-
+#%% Exposure
 # Set exposure: (see tutorial climada_entity_LitPop)
 if load_exp_with_h5py:
     # LitPop Exposure
-    exp_hail = LitPop()
-    exp_hail.read_hdf5(input_folder +"/exp_switzerland.hdf5")
-    exp_hail.check()
+    exp_infr= LitPop()
+    exp_infr.read_hdf5(input_folder +"/exp_switzerland.hdf5")
+    exp_infr.check()
     #Agrar Exposure    
     exp_agr = Exposures()
     exp_agr.read_hdf5(input_folder + "/exp_agr.hdf5")
     exp_agr.check()
 else: #be carefull, this step will take ages when you do both at once
     # LitPop Exposure
-    exp_hail = LitPop()
-    exp_hail.set_country('Switzerland', reference_year = 2019)
-    exp_hail.set_geometry_points()
-    exp_hail = exp_hail.rename(columns = {'if_': 'if_HL'})
-    exp_hail = Exposures(exp_hail)
-    exp_hail.set_lat_lon()
-    exp_hail.check()
-    exp_hail.assign_centroids(haz_hail, method = "NN", distance ="haversine", threshold = 2)
-    exp_hail.write_hdf5(input_folder + "/exp_switzerland.hdf5")
+    exp_infr = LitPop()
+    exp_infr.set_country('Switzerland', reference_year = 2019)
+    exp_infr.set_geometry_points()
+    exp_infr = exp_infr.rename(columns = {'if_': 'if_HL'})
+    exp_infr = Exposures(exp_infr)
+    exp_infr.set_lat_lon()
+    exp_infr.check()
+    exp_infr.assign_centroids(haz_hail, method = "NN", distance ="haversine", threshold = 2)
+    exp_infr.write_hdf5(input_folder + "/exp_switzerland.hdf5")
     # Agrar Exposure
     exp_agr = Exposures()
     exp_agr.read_hdf5(input_folder + "/exp_hail_agr.hdf5")
@@ -249,27 +235,29 @@ else: #be carefull, this step will take ages when you do both at once
 
 
 if plot_img:    
-    exp_hail.plot_basemap()
+    exp_infr.plot_basemap()
     #This takes to long. Do over night!!!
     #exp_agr.plot_basemap() 
 
-imp_hail = Impact()
-imp_hail.calc(exp_hail, ifset_hail, haz_hail,save_mat=True)
-# imp_hail.plot_raster_eai_exposure()
+#%% Impact
+
+imp_infr = Impact()
+imp_infr.calc(exp_infr, ifset_hail, haz_hail,save_mat=True)
+# imp_infr.plot_raster_eai_exposure()
+
+
+imp_agr = Impact()
+imp_agr.calc(exp_agr, ifset_hail, haz_hail, save_mat = True)
 
 for ev_name in ev_list:
-    imp_hail.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
-#     # plt.show()
-
+    imp_infr.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
+    imp_agr.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
+    
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
 
 #Secret test chamber pssst
 if True:
-    imp_agr = Impact()
-    imp_agr.calc(exp_agr, ifset_hail, haz_hail, save_mat = True)
-    print("dmg litpop {} Mio CHF, dmg agr {} Mio CHF".format(imp_hail.aai_agg/1e6, imp_agr.aai_agg/1e6))
-    for ev_name in ev_list:
-        imp_agr.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
+    print("dmg litpop {} Mio CHF, dmg agr {} Mio CHF".format(imp_infr.aai_agg/1e6, imp_agr.aai_agg/1e6))
 
 # imp_agr.plot_raster_eai_exposure(raster_res = 0.008333333333325754)
