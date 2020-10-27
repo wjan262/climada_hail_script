@@ -26,6 +26,7 @@ import h5py
 #%% Parameter
 load_exp_with_h5py = True
 load_haz_with_hdf5 = True
+load_resampling_data = False #False = real data, True = Synth data
 plot_img = False
 haz_type = "HL"
 ev_list = []#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
@@ -41,6 +42,7 @@ imp_fun_parameter = [imp_fun_infrastructure, imp_fun_grape, imp_fun_fruit, imp_f
 input_folder = "/home/jan/Documents/ETH/Masterarbeit/input"
 results_folder = "~/Documents/ETH/Masterarbeit/results"
 years = ["2002", "2003", "2004","2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018","2019"]
+
 # path_poh = "hail_log_data/BZC_X1d66_V2_2019.nc"
 # path_meshs = "hail_log_data/MZC_X1d66_V2_2019.nc"
 
@@ -116,7 +118,7 @@ def get_hail_data(years,
             csr_poh = sparse.csr_matrix(df_poh["BZC"].fillna(value=0))
             csr_meshs = sparse.csr_matrix(df_meshs["MZC"].fillna(value=0))
             event_name.append(df_poh.time[0].strftime("%d/%m/%Y"))
-            date = np.append(date, df_poh.time[0].toordinal())
+            date = np.append(int(date, df_poh.time[0].toordinal()))
             if fraction is None: #first iteration        
                 fraction = csr_poh #0-100%
                 intensity = csr_meshs #20-244mm
@@ -166,7 +168,10 @@ def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
 #%% Hazard
 if load_haz_with_hdf5:
     haz_hail = Hazard()
-    haz_hail.read_hdf5(input_folder + "/haz_hail.hdf5")
+    if load_resampling_data:
+        haz_hail.read_hdf5(input_folder +"/haz_hail_synth.hdf5")
+    else:
+        haz_hail.read_hdf5(input_folder + "/haz_hail.hdf5")
 else:
     haz_hail = Hazard(haz_type)
     haz_hail.units = "mm"
@@ -244,10 +249,15 @@ if plot_img:
 imp_infr = Impact()
 imp_infr.calc(exp_infr, ifset_hail, haz_hail,save_mat=True)
 # imp_infr.plot_raster_eai_exposure()
-
+freq_curve_infr = imp_infr.calc_freq_curve()
+freq_curve_infr.plot()
+plt.show()
 
 imp_agr = Impact()
 imp_agr.calc(exp_agr, ifset_hail, haz_hail, save_mat = True)
+freq_curve_agr = imp_agr.calc_freq_curve()
+freq_curve_agr.plot()
+plt.show()
 
 for ev_name in ev_list:
     imp_infr.plot_basemap_impact_exposure(event_id = haz_hail.get_event_id(event_name=ev_name)[0])
@@ -258,6 +268,6 @@ print("I'm done with the script")
 
 #Secret test chamber pssst
 if True:
-    print("dmg litpop {} Mio CHF, dmg agr {} Mio CHF".format(imp_infr.aai_agg/1e6, imp_agr.aai_agg/1e6))
+    print("dmg infr {} Mio CHF, dmg agr {} Mio CHF".format(imp_infr.aai_agg/1e6, imp_agr.aai_agg/1e6))
 
 # imp_agr.plot_raster_eai_exposure(raster_res = 0.008333333333325754)
