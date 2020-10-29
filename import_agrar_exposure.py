@@ -5,6 +5,25 @@ Created on Tue Oct 13 11:51:58 2020
 
 @author: jan
 """
+
+#%% Import
+import sys
+sys.path.append("/home/jan/Documents/ETH/Masterarbeit/climada_python")
+import numpy as np
+import netCDF4 as nc
+import xarray as xr
+import pandas as pd
+import geopandas as gpd
+from climada.hazard import Hazard
+from scipy import sparse
+import copy as cp
+from matplotlib import pyplot as plt
+from climada.entity import Exposures, Entity, LitPop
+from climada.entity import ImpactFuncSet, ImpactFunc
+from climada.engine import Impact
+import h5py
+
+#%% Functions
 import sys
 sys.path.append("/home/jan/Documents/ETH/Masterarbeit/climada_python")
 import pandas as pd
@@ -14,10 +33,6 @@ from climada.engine import Impact
 import matplotlib.pyplot as plt
 import_data = True
 
-if import_data:
-    path_data = "agrar_exposure/data_arealstatistik/AREA_NOLU04_46_191202.csv"
-    df_data = pd.read_csv(path_data)
-    
 
 def is_agrar(row):
     """
@@ -79,8 +94,14 @@ def transform_coord(E, N):
     eps = epsylon_star * 100 / 36
     return lambd, eps
 
+if import_data:
+    path_data = "~/Documents/ETH/Masterarbeit/agrar_exposure/data_arealstatistik/AREA_NOLU04_46_191202.csv"
+    df_data = pd.read_csv(path_data)
+    
+
 df_data = df_data[["X", "Y", "LU18_46", "E", "N"]]
 df_data["is_agrar"] = df_data.apply(lambda row: is_agrar(row), axis = 1)
+df_data_2 = df_data.copy()
 
 #reduce data to only include points specified in is_agrar() function
 df_data = df_data[df_data["is_agrar"] == 1]
@@ -100,7 +121,11 @@ exp_hail_agr["region_id"] = df_data["LU18_46"]
 # ackerbau 221 (C1.1.01.11 Pflanzliche Erzeugung): 4'436'181'114 (Obst und Wein (C1.1.01.117 479'824'835))
 # = 3955797175
 
-value_obst = 559104082
+# Gedanken zur Wertverteilung. Die Zahlen für den Wert findi ich gut. Aber nur weil ein Punkt
+# mit dieser anbaufläche gefunden wurde heisst es nicht, dass die fläche dort auch 1ha entspricht.
+# Dies könnte ich korrigieren indem ich flächenstatistiken anschaue. Z.b. ist die Fläche¨
+
+value_obst = 351008936
 avg_value_obst = value_obst / exp_hail_agr[exp_hail_agr["region_id"]==201].shape[0]
 value_rebbau = 208015146
 avg_value_rebbau = value_rebbau / exp_hail_agr[exp_hail_agr["region_id"]==202].shape[0]
@@ -113,10 +138,15 @@ c = exp_hail_agr[exp_hail_agr["region_id"]==221].assign(value = avg_value_ackerb
 exp_hail_agr = pd.concat([a,b,c]).sort_index()
 exp_hail_agr = Exposures(exp_hail_agr)
 
+exp_hail_agr.loc[exp_hail_agr["region_id"]==201, "if_"]= int(3)
+exp_hail_agr.loc[exp_hail_agr["region_id"]==202, "if_"]= int(2)
+exp_hail_agr.loc[exp_hail_agr["region_id"]==221, "if_"]= int(4)
+exp_hail_agr = exp_hail_agr.rename(columns = {'if_': 'if_HL'})
+
 exp_hail_agr.check()
 exp_hail_agr.head()
 
-exp_hail_agr.write_hdf5("exp_hail_agr.hdf5")
+exp_hail_agr.write_hdf5("exp_agr_no_centr.hdf5")
 
 test = exp_hail_agr[exp_hail_agr["value"]>0]
 
