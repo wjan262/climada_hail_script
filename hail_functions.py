@@ -28,7 +28,28 @@ from pathlib import Path
 #%% Functions
 
 def generate_haz(name_haz, name_hdf5_file, input_folder, years):
+    """
+    
+
+    Parameters
+    ----------
+    name_haz : str
+        name of hazard ["haz_real", "haz_synth", "haz_dur"].
+    name_hdf5_file : dict
+        names of corresponding hdf5 files.
+    input_folder : str
+        Path to input folder.
+    years : list of str
+        years for which data will be loaded.
+
+    Returns
+    -------
+    haz : climada.hazard.base.Hazard
+        CLIMADA hazard.
+
+    """
     # here it gets a bit ugly
+    
 
     if name_haz == "haz_real":
         haz = Hazard("HL")
@@ -63,6 +84,7 @@ def generate_haz(name_haz, name_hdf5_file, input_folder, years):
                 lat, lon, haz.date = get_hail_data(
                 years = years,  
                 input_folder = input_folder)
+        haz.intensity_thres = 0
         #set coordinates
         haz.centroids.set_lat_lon(lat, lon)
         haz.event_id = np.arange(haz.intensity.shape[0], dtype = int) + 1
@@ -71,6 +93,26 @@ def generate_haz(name_haz, name_hdf5_file, input_folder, years):
     return haz
 
 def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, years):
+    """
+    Parameters
+    ----------
+    force_new_hdf5_generation : dict of bool
+        Dict containing which hdf5 should be new generated.
+    name_haz : str
+        name of hazard ["haz_real", "haz_synth", "haz_dur"]. 
+    name_hdf5_file : dict
+        names of corresponding hdf5 files.
+    input_folder : str
+        Path to input folder.
+    years : list of str
+        years for which data will be loaded.
+
+    Returns
+    -------
+    haz : climada.hazard.base.Hazard
+        CLIMADA hazard.
+
+    """
     my_file = Path(input_folder + "/" + name_hdf5_file[name_haz])
     if force_new_hdf5_generation[name_haz]:
         haz = generate_haz(name_haz, name_hdf5_file, input_folder, years)
@@ -82,9 +124,8 @@ def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, 
         haz = generate_haz(name_haz, name_hdf5_file, input_folder, years)
     return haz
 
-def create_impact_func(haz_type, imp_id, max_y, middle_x, width):
+def create_impact_func(haz_type, imp_id, max_y, start_sig, width):
     """
-
     Parameters
     ----------
     haz_type : str
@@ -104,14 +145,24 @@ def create_impact_func(haz_type, imp_id, max_y, middle_x, width):
         DESCRIPTION.
 
     """
-    name = {1: "Hail on infrastructure", 2: "Hail on grape production", 3: "Hail on fruit production", 4: "Hail on agriculture (without fruits and grape production"}
+    name = {1: "Hail (Meshs) on infrastructure",
+            2: "Hail (Meshs) on grape production",
+            3: "Hail (Meshs) on fruit production",
+            4: "Hail (Meshs) on agriculture (without fruits and grape production",
+            5: "Hail (duration) on grape production", 
+            6: "Hail (duration) on fruit production",
+            7: "Hail (duration) on agriculture (without fruits and grape production",}
     imp_fun= ImpactFunc() 
     imp_fun.haz_type = haz_type
     imp_fun.id = imp_id
     imp_fun.name = name[imp_id]
-    imp_fun.intensity_unit = 'mm'
+    if imp_id <=4:
+        imp_fun.intensity_unit = 'mm'
+    else:
+        imp_fun.intensity_unit = "min"
     imp_fun.intensity = np.linspace(0, 244, num=245)
-    imp_fun.mdd = mdd_function(max_y, middle_x, width)
+    imp_fun.mdd = mdd_function_sigmoid(imp_id, max_y, start_sig, width)
+
     imp_fun.paa = np.linspace(1, 1, num=245)
     imp_fun.check()
     return imp_fun
@@ -244,7 +295,7 @@ def get_hail_data(years,
             df_dur = xr_dur.sel(time = xr_dur.time[i]).to_dataframe()
             csr_poh = sparse.csr_matrix(df_poh["BZC"].fillna(value=0))
             csr_meshs = sparse.csr_matrix(df_meshs["MZC"].fillna(value=0))
-            csr_dur = sparse.csr_matrix(df_dur["BZC80_dur"].fillna(value=0)*5)
+            csr_dur = sparse.csr_matrix(df_dur["BZC80_dur"].fillna(value=0)*20)
             event_name.append(df_poh.time[0].strftime("%d/%m/%Y"))
             date = np.append(date, int(df_poh.time[0].toordinal()))
             if fraction is None: #first iteration        
@@ -259,10 +310,8 @@ def get_hail_data(years,
         xr_meshs.close()
     return fraction, intensity, duration,  event_name, lat, lon, date
 
-def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
+def mdd_function_sigmoid(imp_id, max_y=0.1, start_sig = 0, width=100, plot_y = False):
     """
-    
-
     Parameters
     ----------
     max_y : float, optional
@@ -280,20 +329,25 @@ def mdd_function(max_y=0.1, middle_x=90, width=100, plot_y = False):
         for impact function mdd.
 
     """
-    if width/2 > middle_x:
-        print("Changed middle_x form {} to width/2 {}".format(middle_x, width/2))
-        middle_x = int(width/2)
     y = np.zeros(245)
     x = np.linspace(-6, 6, num=width)
-    start_sig = int(middle_x - width/2)
-    end_sig = start_sig + width
+    end_sig = width + start_sig
+    if start_sig < 0:
+        x = x[abs(start_sig):]
+        start_sig = 0
+    if width + start_sig > len(y):
+        x = x[0:len(y)]
     y[start_sig:end_sig] = 1/(1+np.exp(-x))
     y[end_sig:] = 1.
-    y = y * max_y
-    y[0:20]=0 #values under 20 do not exist in MESHS
+    if y[0]>0: #move function in y direction so that f(x=0)=0
+        y = y - y[0]
+    y = y * (1/y[-1]) * max_y #stretch function in y direction so that f(x=max) = max_y
+    if imp_id <= 4:
+        y[0:20]=0 #values under 20 do not exist in MESHS
     if plot_y:
         plt.plot(y)
     return y
+
 
 # Set exposure: (see tutorial climada_entity_LitPop)
 def load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real):
