@@ -26,13 +26,15 @@ from pathlib import Path
 import time
 from sklearn.metrics import mean_squared_error
 from scipy import optimize
+from scipy import stats
+from scipy.stats import spearmanr
 
 #%% Functions
 
 def generate_haz(name_haz, name_hdf5_file, input_folder, years):
     """
+    Generates new CLIMADA Hazard class
     
-
     Parameters
     ----------
     name_haz : str
@@ -96,6 +98,8 @@ def generate_haz(name_haz, name_hdf5_file, input_folder, years):
 
 def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, years):
     """
+    Load CLIMADA hazard class from existing hdf5 file
+    
     Parameters
     ----------
     force_new_hdf5_generation : dict of bool
@@ -128,23 +132,25 @@ def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, 
 
 def create_impact_func(haz_type, imp_id, L, x_0, k):
     """
+    Create CLIMADA Impact function
+    
     Parameters
     ----------
     haz_type : str
-        .
-    imp_id : TYPE
-        DESCRIPTION.
-    max_y : TYPE
-        DESCRIPTION.
-    middle_x : TYPE
-        DESCRIPTION.
-    width : TYPE
-        DESCRIPTION.
+        hazard type ("HL").
+    imp_id : int
+        id of Impact function.
+    L : float
+        Impact function parameter (max_y).
+    x_0 : float
+        Impact function parameter (middle_x).
+    k : flaot
+        Impact function parameter (width).
 
     Returns
     -------
-    imp_fun : TYPE
-        DESCRIPTION.
+    imp_fun : entity.impact_funcs.base.ImpactFunc
+        CLIMADA Impact function.
 
     """
     name = {1: "Hail (Meshs) on infrastructure",
@@ -176,7 +182,8 @@ def get_hail_data_synth(years,
                   input_folder,
                   chunk_size = 100000):
     """
-
+    Load radar data from netcdf-files
+    
     Parameters
     ----------
     years : list of int
@@ -244,7 +251,8 @@ def get_hail_data(years,
                   input_folder,
                   chunk_size = 100000):
     """
-
+    Load radar data from netcdf-file
+    
     Parameters
     ----------
     years : list of int
@@ -317,6 +325,8 @@ def get_hail_data(years,
 
 def mdd_function_sigmoid(imp_id, max_y=0.1, start_sig = 0, width=100, plot_y = False):
     """
+    OLD: Create Impact function
+    
     Parameters
     ----------
     max_y : float, optional
@@ -354,6 +364,25 @@ def mdd_function_sigmoid(imp_id, max_y=0.1, start_sig = 0, width=100, plot_y = F
     return y
 
 def sigmoid(x, L, x_0, k):
+    """
+    Create sigmoid function for Impact function
+    Parameters
+    ----------
+    x : numpy.ndarray
+        values for x-axis (intensity-axis)
+    L : float
+        Impact function parameter (max_y).
+    x_0 : float
+        Impact function parameter (middle_x).
+    k : flaot
+        Impact function parameter (width).
+
+    Returns
+    -------
+    y : numpy.ndarray
+        values for y-axis (Impact%-axis) corresponding to x.
+
+    """
     x_min = x.min()
     y = np.zeros(len(x))
     f_x = np.zeros(len(x))
@@ -365,13 +394,54 @@ def sigmoid(x, L, x_0, k):
     return y
         
 def RMSF(X, Y):
-    sol = 0
-    for i in range(len(X)):
-        sol += np.log(Y[i]/X[i])**2
-    sol = np.exp((sol/len(X))**(1/2))
-    return sol
+    """
+    Calculate the Root Mean Squared Fraction (RMSF)
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Values from CLIMADA.
+    Y : np.ndarray
+        Values from observations.
 
-def make_Y(parameter, *args): # *args = imp_fun_parameter, exp, agr, haz_type
+    Returns
+    -------
+    sol : float
+        Result of RMSF for X and Y.
+
+    """
+    res = 0
+    for i in range(len(X)):
+        res += np.log(Y[i]/X[i])**2
+    res = np.exp((res/len(X))**(1/2))
+    return res
+
+def make_Y(parameter, *args):
+    """
+    Score function for Optimization process. 
+    Multiple scoring options are present (spearman, pearson, RMSE, RMSF)
+    Parameters
+    ----------
+    parameter : np.ndarray
+        array containing parameter that are optimized.
+    *args : 
+        imp_fun_parameter: dict
+            Contains ind and Parameter for Impact function
+        exp: climada.entity.exposures.base.Exposures
+            CLIMADA Expusure.
+        haz: climada.hazard.base.Hazard
+            CLIMADA hazard
+        haz_type: str
+            Type of Hazard ("HL")
+        num_fct: int
+            number of Impact functions ([1,3])
+
+    Returns
+    -------
+    score: float
+        Variable that is minimizes by optimization. Mulitple variables possible.
+    """
+    # *args = imp_fun_parameter, exp, agr, haz_type
     # a = time.perf_counter()
     parameter_optimize, exp, haz, haz_type, num_fct = args
     ifset_hail = ImpactFuncSet()
@@ -392,7 +462,7 @@ def make_Y(parameter, *args): # *args = imp_fun_parameter, exp, agr, haz_type
     # b = time.perf_counter()
     # print("time to write parameter_optimize: ", b-a)
     for imp_fun_dict in parameter_optimize:
-        imp_fun = fct.create_impact_func(haz_type, 
+        imp_fun = create_impact_func(haz_type, 
                              imp_fun_dict["imp_id"], 
                              imp_fun_dict["L"], 
                              imp_fun_dict["x_0"], 
@@ -426,6 +496,27 @@ def make_Y(parameter, *args): # *args = imp_fun_parameter, exp, agr, haz_type
     
 # Set exposure: (see tutorial climada_entity_LitPop)
 def load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real):
+    """
+    Load generate Exposure of infrastructure if forced or if hdf5 file not present. 
+    Otherwise load hdf5 file.
+
+    Parameters
+    ----------
+    force_new_hdf5_generation : dict of bool
+        contains bool wether new Exposure should be forcefully generated.
+    name_hdf5_file : str
+        name of hdf5 file from wich Exposure is loaded.
+    input_folder : str
+        Path to input folder containing hdf5 file.
+    haz_real : climada.hazard.base.Hazard
+        CLIMADA hazard.
+
+    Returns
+    -------
+    exp_infr : climada.entity.exposures.base.Exposures
+        CLIMADA Exposure of infrastructure.
+
+    """
     file = Path(input_folder + "/" + name_hdf5_file["exp_infr"])
     if force_new_hdf5_generation["exp_infr"] or not file.exists(): #be carefull, this step will take ages when you do both at once
         # LitPop Exposure
@@ -447,6 +538,31 @@ def load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_r
     return exp_infr
 
 def load_exp_agr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real):
+    """
+    
+
+    Parameters
+    ----------
+    Load generate Exposure of agriculture if forced or if hdf5 file not present. 
+    Otherwise load hdf5 file.
+
+    Parameters
+    ----------
+    force_new_hdf5_generation : dict of bool
+        contains bool wether new Exposure should be forcefully generated.
+    name_hdf5_file : str
+        name of hdf5 file from wich Exposure is loaded.
+    input_folder : str
+        Path to input folder containing hdf5 file.
+    haz_real : climada.hazard.base.Hazard
+        CLIMADA hazard.
+
+    Returns
+    -------
+    exp_infr : climada.entity.exposures.base.Exposures
+        CLIMADA Exposure of Exposure.
+
+    """
     file1 = Path(input_folder + "/" + name_hdf5_file["exp_agr"])
     file2 = Path(input_folder + "/" + "exp_agr_no_centr.hdf5")
     if not file2.exists() and not file1.exists():

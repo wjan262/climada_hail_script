@@ -26,6 +26,8 @@ import hail_functions as fct
 from sklearn.metrics import mean_squared_error
 from scipy import optimize
 import time
+from scipy import stats
+from scipy.stats import spearmanr
 
 #%% Parameter
 force_new_hdf5_generation ={"haz_real": False, 
@@ -157,8 +159,7 @@ if True:
     plt.plot(norm_dmg_from_sturmarchiev)
     plt.legend(["meshs", "sturmarchiev"])
     plt.show()
-    from scipy import stats
-    from scipy.stats import spearmanr
+
     print("pearson for agr with meshs (score, p_value) = {} ".format(stats.pearsonr(norm_dmg_from_sturmarchiev, norm_agr_meshs_yearly_imp)))
     print("pearson for agr with dur (score, p_value) = {} ".format(stats.pearsonr(norm_dmg_from_sturmarchiev, norm_agr_dur_yearly_imp)))
     
