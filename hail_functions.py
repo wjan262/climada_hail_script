@@ -23,7 +23,9 @@ from climada.entity import ImpactFuncSet, ImpactFunc
 from climada.engine import Impact
 import h5py
 from pathlib import Path
-
+import time
+from sklearn.metrics import mean_squared_error
+from scipy import optimize
 
 #%% Functions
 
@@ -124,7 +126,7 @@ def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, 
         haz = generate_haz(name_haz, name_hdf5_file, input_folder, years)
     return haz
 
-def create_impact_func(haz_type, imp_id, max_y, start_sig, width):
+def create_impact_func(haz_type, imp_id, L, x_0, k):
     """
     Parameters
     ----------
@@ -158,12 +160,15 @@ def create_impact_func(haz_type, imp_id, max_y, start_sig, width):
     imp_fun.name = name[imp_id]
     if imp_id <=4:
         imp_fun.intensity_unit = 'mm'
+        num = 245
     else:
         imp_fun.intensity_unit = "min"
-    imp_fun.intensity = np.linspace(0, 244, num=245)
-    imp_fun.mdd = mdd_function_sigmoid(imp_id, max_y, start_sig, width)
+        num = 120
+    x = np.arange(num)
+    imp_fun.intensity = np.linspace(0, num, num=num)
+    imp_fun.mdd = sigmoid(x, L, x_0, k)
 
-    imp_fun.paa = np.linspace(1, 1, num=245)
+    imp_fun.paa = np.linspace(1, 1, num=num)
     imp_fun.check()
     return imp_fun
 
@@ -348,7 +353,77 @@ def mdd_function_sigmoid(imp_id, max_y=0.1, start_sig = 0, width=100, plot_y = F
         plt.plot(y)
     return y
 
+def sigmoid(x, L, x_0, k):
+    x_min = x.min()
+    y = np.zeros(len(x))
+    f_x = np.zeros(len(x))
+    i=0
+    for i2 in x:
+        f_x = max(i2-x_min,0)/(x_0-x_min)
+        y[i] = L*((f_x**k)/(1+f_x**k))
+        i+=1
+    return y
+        
+def RMSF(X, Y):
+    sol = 0
+    for i in range(len(X)):
+        sol += np.log(Y[i]/X[i])**2
+    sol = np.exp((sol/len(X))**(1/2))
+    return sol
 
+def make_Y(parameter, *args): # *args = imp_fun_parameter, exp, agr, haz_type
+    # a = time.perf_counter()
+    parameter_optimize, exp, haz, haz_type, num_fct = args
+    ifset_hail = ImpactFuncSet()
+    if num_fct ==1:
+        parameter_optimize[0]["L"] = parameter[0]
+        parameter_optimize[0]["x_0"] = parameter[1]
+        parameter_optimize[0]["k"] = parameter[2]
+    else:
+        parameter_optimize[0]["L"] = parameter[0]
+        parameter_optimize[0]["x_0"] = parameter[1]
+        parameter_optimize[0]["k"] = parameter[2]
+        parameter_optimize[1]["L"] = parameter[3]
+        parameter_optimize[1]["x_0"] = parameter[4]
+        parameter_optimize[1]["k"] = parameter[5]
+        parameter_optimize[2]["L"] = parameter[6]
+        parameter_optimize[2]["x_0"] = parameter[7]
+        parameter_optimize[2]["k"] = parameter[8]
+    # b = time.perf_counter()
+    # print("time to write parameter_optimize: ", b-a)
+    for imp_fun_dict in parameter_optimize:
+        imp_fun = fct.create_impact_func(haz_type, 
+                             imp_fun_dict["imp_id"], 
+                             imp_fun_dict["L"], 
+                             imp_fun_dict["x_0"], 
+                             imp_fun_dict["k"])
+        ifset_hail.append(imp_fun)
+    c  = time.perf_counter()
+    # print("time to make imp_fun: ", c-b)
+    imp = Impact()
+    # imp.calc(self = imp, exposures = exp, impact_funcs = ifset_hail, hazard = haz, save_mat = True)
+    imp.calc(exp, ifset_hail, haz, save_mat = True)
+    d = time.perf_counter()
+    print("time to calc impact: ", d-c)
+    Y = list(imp.calc_impact_year_set(year_range = [2002, 2019]).values())
+    for count, y in enumerate(Y):
+        if y==0:
+            Y[count] = 1
+            
+    Y_norm = np.divide(Y, min(Y))
+    O_norm = [2.1122213681783246,3.5465026902382784, 6.200614911606457, 5.90315142198309, 2.5103766333589546, 4.801691006917755, 2.02152190622598, 8.501152959262106, 1.0, 2.6541122213681785, 1.6525749423520368, 5.747117601844734, 1.7524980784012298, 1.5249807840122982, 1.345119139123751, 2.751729438893159, 1.8754803996925442,2.55956956187548]
+    
+    # res = mean_squared_error(Y_norm, O_norm)**0.5
+    print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    print("Params {}".format(parameter_optimize))
+    print("The sum of the new Impact is: {}".format(sum(Y)))
+    coef, p_value = spearmanr(O_norm, Y_norm)    
+    print("spearman for agr  (score, p_value) = ({}, {})".format(coef, p_value))
+    print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    # e= time.perf_counter()
+    # print("time to get result: ", e-d)
+    return coef*-1
+    
 # Set exposure: (see tutorial climada_entity_LitPop)
 def load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real):
     file = Path(input_folder + "/" + name_hdf5_file["exp_infr"])
@@ -388,6 +463,7 @@ def load_exp_agr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_re
     
         exp_agr.check()
         exp_agr.assign_centroids(haz_real, method = "NN", distance = "haversine", threshold = 2)
+        exp_agr.check()
         exp_agr.write_hdf5(input_folder + "/exp_agr.hdf5")
     
     else:
