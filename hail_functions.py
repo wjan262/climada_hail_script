@@ -63,11 +63,7 @@ def generate_haz(name_haz, name_hdf5_file, input_folder, years):
                 years = years,  
                 input_folder = input_folder)
         haz.intensity_thres = 20
-        #set coordinates
-        haz.centroids.set_lat_lon(lat, lon)
-        haz.event_id = np.arange(haz.intensity.shape[0], dtype = int) + 1
-        #set frequency
-        haz.frequency = np.ones(haz.intensity.shape[0])/len(years)
+
     elif name_haz == "haz_synth":
         haz = Hazard("HL")
         haz.units = "mm"
@@ -76,11 +72,7 @@ def generate_haz(name_haz, name_hdf5_file, input_folder, years):
                 years = years,  
                 input_folder = input_folder)
         haz.intensity_thres = 20
-        #set coordinates
-        haz.centroids.set_lat_lon(lat, lon)
-        haz.event_id = np.arange(haz.intensity.shape[0], dtype = int) + 1
-        #set frequency
-        haz.frequency = np.ones(haz.intensity.shape[0])/len(years)
+
     else:
         haz = Hazard("HL")
         haz.units = "min"
@@ -89,11 +81,16 @@ def generate_haz(name_haz, name_hdf5_file, input_folder, years):
                 years = years,  
                 input_folder = input_folder)
         haz.intensity_thres = 0
-        #set coordinates
-        haz.centroids.set_lat_lon(lat, lon)
-        haz.event_id = np.arange(haz.intensity.shape[0], dtype = int) + 1
-        #set frequency 
-        haz.frequency = np.ones(haz.intensity.shape[0])/len(years)
+
+    #set frequency
+    haz.frequency = np.ones(haz.intensity.shape[0])/len(years)        
+    haz.event_id = np.arange(1, haz.intensity.shape[0]+1, dtype = int)
+    #set coordinates
+    haz.centroids.set_lat_lon(lat, lon)
+    save_haz = input("you forced a new generation of {}. Do you want to save it as hdf5 [True, False]? ".format(name_haz))
+    if save_haz == "True":
+        print("writing new Hazard to hdf5")
+        haz.write_hdf5(input_folder + "/" + name_haz + ".hdf5")
     return haz
 
 def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, years):
@@ -216,7 +213,7 @@ def get_hail_data_synth(years,
     lat = None
     lon = None
     event_name = []
-    date = np.ndarray(0)
+    date = np.ndarray(0, dtype=int)
     for year in years:
         print(year)
         xr_poh = xr.open_dataset(
@@ -236,7 +233,7 @@ def get_hail_data_synth(years,
             csr_poh = sparse.csr_matrix(df_poh["BZC"].fillna(value=0))
             csr_meshs = sparse.csr_matrix(df_meshs["MZC"].fillna(value=0))
             event_name.append(df_poh.time[0].strftime("%d/%m/%Y"))
-            date = np.append(date, df_poh.time[0].toordinal())
+            date = np.append(date, int(df_poh.time[0].toordinal()))
             if fraction is None: #first iteration        
                 fraction = csr_poh #0-100%
                 intensity = csr_meshs #20-244mm
@@ -285,7 +282,7 @@ def get_hail_data(years,
     lat = None
     lon = None
     event_name = []
-    date = np.ndarray(0)
+    date = np.ndarray(0, dtype=int)
     for year in years:
         print(year)
         xr_poh = xr.open_dataset(
@@ -308,7 +305,7 @@ def get_hail_data(years,
             df_dur = xr_dur.sel(time = xr_dur.time[i]).to_dataframe()
             csr_poh = sparse.csr_matrix(df_poh["BZC"].fillna(value=0))
             csr_meshs = sparse.csr_matrix(df_meshs["MZC"].fillna(value=0))
-            csr_dur = sparse.csr_matrix(df_dur["BZC80_dur"].fillna(value=0)*20)
+            csr_dur = sparse.csr_matrix(df_dur["BZC80_dur"].fillna(value=0)*5) # *5 since its the count of 5min data whith hail
             event_name.append(df_poh.time[0].strftime("%d/%m/%Y"))
             date = np.append(date, int(df_poh.time[0].toordinal()))
             if fraction is None: #first iteration        
@@ -321,6 +318,7 @@ def get_hail_data(years,
                 duration = sparse.vstack([duration, csr_dur])
         xr_poh.close()
         xr_meshs.close()
+        xr_dur.close()
     return fraction, intensity, duration,  event_name, lat, lon, date
 
 def mdd_function_sigmoid(imp_id, max_y=0.1, start_sig = 0, width=100, plot_y = False):
@@ -412,6 +410,7 @@ def RMSF(X, Y):
     """
     res = 0
     for i in range(len(X)):
+
         res += np.log(Y[i]/X[i])**2
     res = np.exp((res/len(X))**(1/2))
     return res
@@ -443,7 +442,7 @@ def make_Y(parameter, *args):
     """
     # *args = imp_fun_parameter, exp, agr, haz_type
     # a = time.perf_counter()
-    parameter_optimize, exp, haz, haz_type, num_fct = args
+    parameter_optimize, exp, haz, haz_type, num_fct, score_type = args
     ifset_hail = ImpactFuncSet()
     if num_fct ==1:
         parameter_optimize[0]["L"] = parameter[0]
@@ -472,27 +471,43 @@ def make_Y(parameter, *args):
     # print("time to make imp_fun: ", c-b)
     imp = Impact()
     # imp.calc(self = imp, exposures = exp, impact_funcs = ifset_hail, hazard = haz, save_mat = True)
-    imp.calc(exp, ifset_hail, haz, save_mat = True)
+    imp.calc(exp, ifset_hail, haz, save_mat = False)
     d = time.perf_counter()
     print("time to calc impact: ", d-c)
     Y = list(imp.calc_impact_year_set(year_range = [2002, 2019]).values())
+    all_eq = 0
     for count, y in enumerate(Y):
         if y==0:
-            Y[count] = 1
+            all_eq += 1
+            Y[count] = 0.1
+    if all_eq == len(Y):
+        Y[-1] = 0.2
             
     Y_norm = np.divide(Y, min(Y))
-    O_norm = [2.1122213681783246,3.5465026902382784, 6.200614911606457, 5.90315142198309, 2.5103766333589546, 4.801691006917755, 2.02152190622598, 8.501152959262106, 1.0, 2.6541122213681785, 1.6525749423520368, 5.747117601844734, 1.7524980784012298, 1.5249807840122982, 1.345119139123751, 2.751729438893159, 1.8754803996925442,2.55956956187548]
-    
+    Observ = [27.48, 46.14, 80.67, 76.80, 32.66, 62.47, 26.30, 110.60, 13.01,
+              34.53, 21.50, 71.77, 22.80, 19.84, 17.50, 35.80, 24.40, 33.30]
+    O_norm = np.divide(Observ, min(Observ))
     # res = mean_squared_error(Y_norm, O_norm)**0.5
+    rmsf = RMSF(Y_norm, O_norm)
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
     print("Params {}".format(parameter_optimize))
     print("The sum of the new Impact is: {}".format(sum(Y)))
-    coef, p_value = spearmanr(O_norm, Y_norm)    
-    print("spearman for agr  (score, p_value) = ({}, {})".format(coef, p_value))
+    spear_coef, spear_p_value = spearmanr(O_norm, Y_norm)    
+    print("spearman for agr  (score, p_value) = ({}, {})".format(spear_coef, spear_p_value))
+
+    pears_coef, pears_p_value = stats.pearsonr(O_norm, Y_norm)   
+    print("pearson for agr  (score, p_value) = ({}, {})".format(pears_coef, pears_p_value))
+    print("RMSF: ", rmsf)
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
     # e= time.perf_counter()
     # print("time to get result: ", e-d)
-    return coef*-1
+    if score_type == "pearson":
+        score = pears_coef * -1
+    elif score_type == "spearman":
+        score = spear_coef * -1
+    elif score_type == "RMSF":
+        score = rmsf
+    return score
     
 # Set exposure: (see tutorial climada_entity_LitPop)
 def load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real):

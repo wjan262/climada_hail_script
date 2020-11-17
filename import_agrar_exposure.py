@@ -24,14 +24,9 @@ from climada.engine import Impact
 import h5py
 
 #%% Functions
-import sys
-sys.path.append("/home/jan/Documents/ETH/Masterarbeit/climada_python")
-import pandas as pd
-from climada.entity import Exposures, Entity, LitPop
-from climada.entity import ImpactFuncSet, ImpactFunc
-from climada.engine import Impact
-import matplotlib.pyplot as plt
-import_data = True
+
+import_data_09 = False
+input_folder = "/home/jan/Documents/ETH/Masterarbeit/input"
 
 
 def is_agrar(row):
@@ -52,7 +47,7 @@ def is_agrar(row):
             240 Alpwirtschaft 241, 242, 243
 
     """    
-    if row["LU18_46"] in [201, 202, 221]:#,222,223]:#,241,242,243]:
+    if row["LU09R_46"] in [201, 202, 221]:#,222,223]:#,241,242,243]:
         return 1
     else:
         return 0
@@ -93,26 +88,29 @@ def transform_coord(E, N):
     lambd = lambda_star * 100 / 36
     eps = epsylon_star * 100 / 36
     return lambd, eps
-
-if import_data:
+# TODO Change the skript to take the 2019 data and fill missing data with the 09 data
+if import_data_09:
+    path_data = "~/Documents/ETH/Masterarbeit/agrar_exposure/ag-b-00.03-37-nolu04/AREA_NOLU04_46_161114.csv"
+    df_data = pd.read_csv(path_data)
+    df_data["E"] = df_data["X"]+2000000
+    df_data["N"] = df_data["Y"] + 1000000
+    #df_data_18 = pd.read_csv(path_data_18)
+else:
     path_data = "~/Documents/ETH/Masterarbeit/agrar_exposure/data_arealstatistik/AREA_NOLU04_46_191202.csv"
     df_data = pd.read_csv(path_data)
-    
 
-df_data = df_data[["X", "Y", "LU18_46", "E", "N"]]
+df_data = df_data[["X", "Y", "LU09R_46", "E", "N"]]
 df_data["is_agrar"] = df_data.apply(lambda row: is_agrar(row), axis = 1)
-df_data_2 = df_data.copy()
 
 #reduce data to only include points specified in is_agrar() function
 df_data = df_data[df_data["is_agrar"] == 1]
 
 lambd, eps = transform_coord(E = df_data["E"], N = df_data["N"])
 
-
 exp_hail_agr = Exposures()
 exp_hail_agr["latitude"] = eps
 exp_hail_agr["longitude"] = lambd
-exp_hail_agr["region_id"] = df_data["LU18_46"]
+exp_hail_agr["region_id"] = df_data["LU09R_46"]
 
 
 # Giving value to the different sectors. Source: https://www.pxweb.bfs.admin.ch/pxweb/de/px-x-0704000000_121/px-x-0704000000_121/px-x-0704000000_121.px
@@ -121,9 +119,7 @@ exp_hail_agr["region_id"] = df_data["LU18_46"]
 # ackerbau 221 (C1.1.01.11 Pflanzliche Erzeugung): 4'436'181'114 (Obst und Wein (C1.1.01.117 479'824'835))
 # = 3955797175
 
-# Gedanken zur Wertverteilung. Die Zahlen für den Wert findi ich gut. Aber nur weil ein Punkt
-# mit dieser anbaufläche gefunden wurde heisst es nicht, dass die fläche dort auch 1ha entspricht.
-# Dies könnte ich korrigieren indem ich flächenstatistiken anschaue. Z.b. ist die Fläche¨
+# 
 
 value_obst = 351008936
 avg_value_obst = value_obst / exp_hail_agr[exp_hail_agr["region_id"]==201].shape[0]
@@ -145,8 +141,8 @@ exp_hail_agr = exp_hail_agr.rename(columns = {'if_': 'if_HL'})
 
 exp_hail_agr.check()
 exp_hail_agr.head()
-
-exp_hail_agr.write_hdf5("exp_agr_no_centr.hdf5")
+exp_hail_agr.value_unit = "CHF"
+exp_hail_agr.write_hdf5(input_folder + "/exp_agr_no_centr.hdf5")
 
 test = exp_hail_agr[exp_hail_agr["value"]>0]
 
