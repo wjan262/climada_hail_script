@@ -28,6 +28,7 @@ from sklearn.metrics import mean_squared_error
 from scipy import optimize
 from scipy import stats
 from scipy.stats import spearmanr
+from climada.entity.tag import Tag
 
 #%% Functions
 
