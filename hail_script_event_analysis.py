@@ -46,15 +46,17 @@ name_hdf5_file={"haz_real": "haz_real.hdf5",
 # Optimization
 plot_img = False
 haz_type = "HL"
-ev_list = ["12/07/2011", "13/07/2011"]#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
+ev_list = ["26/05/2009", "23/07/2009", "12/07/2011", "13/07/2011"]#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
 imp_fun_infrastructure = {"imp_id": 1, "L": 0.1, "x_0": 100, "k": 10}
 imp_fun_grape = {"imp_id": 2, "L": 0.8, "x_0": 35, "k": 10}
 imp_fun_fruit = {"imp_id": 3, "L": 1.0, "x_0": 80, "k": 10}
 imp_fun_agriculture = {"imp_id": 4, "L": 0.5, "x_0": 50, "k": 10}
-imp_fun_dur_grape = {"imp_id": 5, "L": 0.8, "x_0": 50, "k": 1}
-imp_fun_dur_fruit = {"imp_id": 6, "L": 1.0, "x_0": 50, "k": 1}
-imp_fun_dur_agriculture = {"imp_id": 7, "L": 0.5, "x_0": 50, "k": 1}
-
+imp_fun_dur_grape = {"imp_id": 5, "L": 1.37, "x_0": 38, "k": 42}
+imp_fun_dur_fruit = {"imp_id": 6, "L": 1.37, "x_0": 38, "k": 42}
+imp_fun_dur_agriculture = {"imp_id": 7, "L": 1.37, "x_0": 38, "k": 42}
+# imp_fun_dur_grape = {"imp_id": 5, "L": 0.8, "x_0": 50, "k": 1}
+# imp_fun_dur_fruit = {"imp_id": 6, "L": 1.0, "x_0": 50, "k": 1}
+# imp_fun_dur_agriculture = {"imp_id": 7, "L": 0.5, "x_0": 50, "k": 1}
 
 imp_fun_parameter = [imp_fun_infrastructure,
                      imp_fun_grape,
@@ -72,11 +74,9 @@ years_synth = ["1979", "1980", "1981", "1982", "1983", "1984", "1985", "1986", "
 
 #%% Hazard
 haz_real = fct.load_haz(force_new_hdf5_generation, "haz_real", name_hdf5_file, input_folder, years)
-haz_synth = fct.load_haz(force_new_hdf5_generation, "haz_synth", name_hdf5_file, input_folder, years_synth)
 haz_dur = fct.load_haz(force_new_hdf5_generation, "haz_dur", name_hdf5_file, input_folder, years)
 
 haz_real.check()
-haz_synth.check()
 
 if plot_img:
     haz_real.plot_intensity(event = 0)
@@ -92,7 +92,8 @@ for imp_fun_dict in imp_fun_parameter:
                                  imp_fun_dict["x_0"], 
                                  imp_fun_dict["k"])
     ifset_hail.append(imp_fun)
-ifset_hail.plot()
+if plot_img:
+    ifset_hail.plot()
 
 #%% Exposure
 
@@ -110,52 +111,108 @@ imp_infr = Impact()
 imp_infr.calc(exp_infr, ifset_hail, haz_real,save_mat=True)
 # imp_infr.plot_raster_eai_exposure()
 freq_curve_infr = imp_infr.calc_freq_curve()
-freq_curve_infr.plot()
-plt.show()
+if plot_img:
+    freq_curve_infr.plot()
 
 imp_agr = Impact()
 imp_agr.calc(exp_meshs, ifset_hail, haz_real, save_mat = True)
 freq_curve_agr = imp_agr.calc_freq_curve()
-freq_curve_agr.plot()
-plt.show()
+if plot_img:
+    freq_curve_agr.plot()
 
 imp_agr_dur = Impact()
 imp_agr_dur.calc(exp_dur, ifset_hail, haz_dur, save_mat = True)
-freq_curve_agr = imp_agr.calc_freq_curve()
-freq_curve_agr.plot()
-plt.show()
+freq_curve_agr_dur = imp_agr.calc_freq_curve()
+if plot_img:
+    freq_curve_agr_dur.plot()
 
-# for ev_name in ev_list:
-#     imp_infr.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
-#     imp_agr.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
-# for ev_name in ev_list:
-#     imp_infr.plot_hexbin_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_list[1])[0], ignore_zero = False)
-#     imp_agr.plot_hexbin_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
-    
+if plot_img:
+    for ev_name in ev_list:
+        imp_infr.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
+        imp_agr.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
+        imp_agr_dur.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
+        imp_infr.plot_hexbin_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
+        imp_agr.plot_hexbin_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
+        imp_agr_dur.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])    
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
 
-#Secret test chamber pssst
-if True:
-    print("dmg infr {} Mio CHF, dmg agr_meshs {} Mio CHF, dmg agr_dur {} Mio CHF".format(imp_infr.aai_agg/1e6, imp_agr.aai_agg/1e6, imp_agr_dur.aai_agg/1e6))
-    agr_meshs_yearly_imp = list(imp_agr.calc_impact_year_set(year_range = [2002, 2019]).values())
-    agr_dur_yearly_imp = list(imp_agr_dur.calc_impact_year_set(year_range = [2002, 2019]).values())
-    # plt.figure()
-    # plt.bar(years, agr_dur_yearly_imp)
-    # plt.show()
-    # plt.figure()
-    # plt.bar(years, agr_meshs_yearly_imp)
-    dmg_from_sturmarchiv = [27.48, 46.14, 80.67, 76.80, 32.66, 62.47, 26.30, 110.60, 13.01, 34.53, 21.50, 71.77, 22.80, 19.84, 17.50, 35.80, 24.40, 33.30]
-    dmg_from_sturmarchiv = [i*1e6 for i in dmg_from_sturmarchiv]
-    norm_agr_meshs_yearly_imp = np.divide(agr_meshs_yearly_imp, min(agr_meshs_yearly_imp))
-    norm_agr_dur_yearly_imp = np.divide(agr_dur_yearly_imp, min(agr_dur_yearly_imp))
-    norm_dmg_from_sturmarchiv = np.divide(dmg_from_sturmarchiv, min(dmg_from_sturmarchiv)) #[i / min(dmg_from_sturmarchiv) for i in dmg_from_sturmarchiv]
-    
-    #plot
-    plt.figure()
-    plt.plot(years, agr_meshs_yearly_imp)
-    plt.plot(agr_dur_yearly_imp)
-    plt.plot(dmg_from_sturmarchiv, linewidth = 3)
-    plt.legend(["meshs", "dur", "sturmarchiv"])
-    plt.xticks(rotation = 45)
+def plot_event(name, ifset_hail, haz_real, haz_dur, exp_infr, exp_meshs, exp_dur, plot_img):
+    print("Event Analysis for {}".format(name))
+    ev_id = haz_real.get_event_id(event_name = name)
+    meshs_intensity = haz_real.intensity[ev_id].todense().astype(int)
+    meshs_intensity_no_0 = np.array(meshs_intensity[meshs_intensity!=0]).ravel()
+    #remove outliers
+    meshs_intensity_no_0 = np.delete(meshs_intensity_no_0, np.where(meshs_intensity_no_0 == 244))
+    dur_intensity = haz_dur.intensity[ev_id].todense().astype(int)
+    dur_intensity_no_0 = np.array(dur_intensity[dur_intensity!=0]).ravel()
+    fig, axs = plt.subplots(1,2, sharey=False, tight_layout = False)
+    fig.suptitle("Histogramm event {}".format(name))
+    axs[0].hist(meshs_intensity_no_0, bins = 25)
+    axs[1].hist(dur_intensity_no_0)
+    axs[0].set(xlabel = "meshs [mm]", ylabel = "frequency")
+    axs[1].set(xlabel = "duration [min]", ylabel = "frequency")
+    axs[0].locator_params(axis="y", integer = True)
+    axs[1].locator_params(axis="y", integer = True)
+    fig.subplots_adjust(wspace = 0.35)
     plt.show()
+    haz_real.plot_intensity(event = ev_id)
+    plt.show()
+    haz_real_ev = haz_real.select(event_names = [name])
+    haz_dur_ev = haz_dur.select(event_names = [name])
+    imp_agr_real_ev = Impact()
+    imp_agr_dur_ev = Impact()
+    imp_infr_real_ev = Impact()
+    imp_agr_real_ev.calc(exp_meshs, ifset_hail, haz_real_ev, save_mat = True)
+    imp_agr_dur_ev.calc(exp_dur, ifset_hail, haz_dur_ev, save_mat = True)
+    imp_infr_real_ev.calc(exp_infr, ifset_hail, haz_real_ev, save_mat = True)
+    print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    print("Meshs on agr at event {}: at_event: {} mio; aai_agg: {} mio; eai_exp: {} mio". format(name, imp_agr_real_ev.at_event/1e6,imp_agr_real_ev.aai_agg/1e6, imp_agr_real_ev.eai_exp/1e6))
+    print("Duration on agr at event {}: at_event: {} mio; aai_agg: {} mio; eai_exp: {} mio". format(name, imp_agr_dur_ev.at_event/1e6, imp_agr_dur_ev.aai_agg/1e6, imp_agr_dur_ev.eai_exp/1e6))
+    print("Meshs on infr at event {}: at_event: {} mio; aai_agg: {} mio; eai_exp: {} mio". format(name, imp_infr_real_ev.at_event/1e6, imp_infr_real_ev.aai_agg/1e6, imp_infr_real_ev.eai_exp/1e6))
+    print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+    if plot_img:
+        imp_agr_real_ev.plot_basemap_impact_exposure()
+        imp_agr_real_ev.plot_hexbin_impact_exposure()
+        imp_agr_dur_ev.plot_basemap_impact_exposure()
+        imp_agr_dur_ev.plot_hexbin_impact_exposure()    
+for name in ev_list:
+    plot_event(name,ifset_hail, haz_real, haz_dur, exp_infr, exp_meshs, exp_dur, plot_img)
+#Secret test chamber pssst
+if False:
+    a=3
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

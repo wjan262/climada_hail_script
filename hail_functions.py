@@ -128,7 +128,7 @@ def load_haz(force_new_hdf5_generation, name_haz, name_hdf5_file, input_folder, 
         haz = generate_haz(name_haz, name_hdf5_file, input_folder, years)
     return haz
 
-def create_impact_func(haz_type, imp_id, L, x_0, k):
+def create_impact_func(haz_type, imp_id, L, x_0, k, y=None):
     """
     Create CLIMADA Impact function
     
@@ -142,8 +142,10 @@ def create_impact_func(haz_type, imp_id, L, x_0, k):
         Impact function parameter (max_y).
     x_0 : float
         Impact function parameter (middle_x).
-    k : flaot
+    k : float
         Impact function parameter (width).
+    y : float
+        Values for mdd. If == 0 then the fuction will call sigmoid()
 
     Returns
     -------
@@ -157,20 +159,82 @@ def create_impact_func(haz_type, imp_id, L, x_0, k):
             4: "Hail (Meshs) on agriculture (without fruits and grape production",
             5: "Hail (duration) on grape production", 
             6: "Hail (duration) on fruit production",
-            7: "Hail (duration) on agriculture (without fruits and grape production",}
+            7: "Hail (duration) on agriculture (without fruits and grape production",
+            8: "Hail (duration) on infrastructure",
+            9: "Hail (duration) on agriculture (fruit + grape + rest)",
+            10: "Hail (Meshs) on agriculture (fruit + grape + rest="
+            }
     imp_fun= ImpactFunc() 
     imp_fun.haz_type = haz_type
     imp_fun.id = imp_id
     imp_fun.name = name[imp_id]
-    if imp_id <=4:
+    if imp_id <=4 or imp_id == 10:
         imp_fun.intensity_unit = 'mm'
-        num = 245
+        num = 150
     else:
         imp_fun.intensity_unit = "min"
         num = 120
     x = np.arange(num)
     imp_fun.intensity = np.linspace(0, num, num=num)
-    imp_fun.mdd = sigmoid(x, L, x_0, k)
+    if type(y) == type(x): #workaround to check wether y is an numpy.ndarray. 
+        imp_fun.mdd = y
+    else:
+        imp_fun.mdd = sigmoid(x, L, x_0, k)
+
+    imp_fun.paa = np.linspace(1, 1, num=num)
+    imp_fun.check()
+    return imp_fun
+
+def create_impact_func_lin(haz_type, imp_id, m, q = 0):
+    """
+    Create CLIMADA Impact function
+    
+    Parameters
+    ----------
+    haz_type : str
+        hazard type ("HL").
+    imp_id : int
+        id of Impact function.
+    m : float
+        Impact function parameter.
+    q : float
+        Impact function parameter (middle_x).
+
+
+    Returns
+    -------
+    imp_fun : entity.impact_funcs.base.ImpactFunc
+        CLIMADA Impact function.
+
+    """
+    name = {1: "Hail (Meshs) on infrastructure",
+            2: "Hail (Meshs) on grape production",
+            3: "Hail (Meshs) on fruit production",
+            4: "Hail (Meshs) on agriculture (without fruits and grape production",
+            5: "Hail (duration) on grape production", 
+            6: "Hail (duration) on fruit production",
+            7: "Hail (duration) on agriculture (without fruits and grape production",
+            8: "Hail (duration) on infrastructure",
+            9: "Hail (duration) on agriculture (fruit + grape + rest)",
+            10: "Hail (Meshs) on agriculture (fruit + grape + rest="
+            }
+    imp_fun= ImpactFunc() 
+    imp_fun.haz_type = haz_type
+    imp_fun.id = imp_id
+    imp_fun.name = name[imp_id]
+    if imp_id <=4 or imp_id == 10:
+        imp_fun.intensity_unit = 'mm'
+        num = 150
+    else:
+        imp_fun.intensity_unit = "min"
+        num = 120
+    x = np.arange(num)
+    imp_fun.intensity = np.linspace(0, num, num=num)
+    
+    imp_fun.mdd = np.linspace(q, m*num, num = num)
+    for i in range(len(imp_fun.mdd)):
+        if imp_fun.mdd[i]>1:
+            imp_fun.mdd[i] = 1
 
     imp_fun.paa = np.linspace(1, 1, num=num)
     imp_fun.check()
@@ -391,8 +455,61 @@ def sigmoid(x, L, x_0, k):
         y[i] = L*((f_x**k)/(1+f_x**k))
         i+=1
     return y
+
+def sigmoid2(x, L, x_0, x_tresh):
+    """
+    Create sigmoid function for Impact function
+    Parameters
+    ----------
+    x : numpy.ndarray
+        values for x-axis (intensity-axis)
+    L : float
+        Impact function parameter (max_y).
+    x_0 : float
+        Impact function parameter (middle_x).
+    x_tresh: float
+        Treshold value for x
+
+    Returns
+    -------
+    y : numpy.ndarray
+        values for y-axis (Impact%-axis) corresponding to x.
+
+    """
+    y = np.zeros(len(x))
+    f_x = np.zeros(len(x))
+    i=0
+    for i2 in x:
+        f_x = max(i2-x_tresh,0)/(x_0-x_tresh)
+        y[i] = L*(f_x**3 /(1+f_x**3))
+        i+=1
+    return y
         
 def RMSF(X, Y):
+    """
+    Calculate the Root Mean Squared Fraction (RMSF)
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Values from CLIMADA.
+    Y : np.ndarray
+        Values from observations.
+
+    Returns
+    -------
+    sol : float
+        Result of RMSF for X and Y.
+
+    """
+    res = 0
+    for i in range(len(X)):
+
+        res += np.log(Y[i]/X[i])**2
+    res = np.exp((res/len(X))**(1/2))
+    return res
+
+def RMSE(X, Y):
     """
     Calculate the Root Mean Squared Fraction (RMSF)
     
@@ -443,33 +560,41 @@ def make_Y(parameter, *args):
     """
     # *args = imp_fun_parameter, exp, agr, haz_type
     # a = time.perf_counter()
-    parameter_optimize, exp, haz, haz_type, num_fct, score_type = args
+    parameter_optimize, exp, haz, haz_type, num_fct, score_type, type_imp_fun = args
     ifset_hail = ImpactFuncSet()
-    if num_fct ==1:
-        parameter_optimize[0]["L"] = parameter[0]
-        parameter_optimize[0]["x_0"] = parameter[1]
-        parameter_optimize[0]["k"] = parameter[2]
-    else:
-        parameter_optimize[0]["L"] = parameter[0]
-        parameter_optimize[0]["x_0"] = parameter[1]
-        parameter_optimize[0]["k"] = parameter[2]
-        parameter_optimize[1]["L"] = parameter[3]
-        parameter_optimize[1]["x_0"] = parameter[4]
-        parameter_optimize[1]["k"] = parameter[5]
-        parameter_optimize[2]["L"] = parameter[6]
-        parameter_optimize[2]["x_0"] = parameter[7]
-        parameter_optimize[2]["k"] = parameter[8]
-    # b = time.perf_counter()
-    # print("time to write parameter_optimize: ", b-a)
-    for imp_fun_dict in parameter_optimize:
-        imp_fun = create_impact_func(haz_type, 
-                             imp_fun_dict["imp_id"], 
-                             imp_fun_dict["L"], 
-                             imp_fun_dict["x_0"], 
-                             imp_fun_dict["k"])
+    if type_imp_fun == "sig":
+        if num_fct ==1:
+            parameter_optimize[0]["L"] = parameter[0]
+            parameter_optimize[0]["x_0"] = parameter[1]
+            parameter_optimize[0]["k"] = parameter[2]
+        else:
+            parameter_optimize[0]["L"] = parameter[0]
+            parameter_optimize[0]["x_0"] = parameter[1]
+            parameter_optimize[0]["k"] = parameter[2]
+            parameter_optimize[1]["L"] = parameter[3]
+            parameter_optimize[1]["x_0"] = parameter[4]
+            parameter_optimize[1]["k"] = parameter[5]
+            parameter_optimize[2]["L"] = parameter[6]
+            parameter_optimize[2]["x_0"] = parameter[7]
+            parameter_optimize[2]["k"] = parameter[8]
+        # b = time.perf_counter()
+        # print("time to write parameter_optimize: ", b-a)
+        for imp_fun_dict in parameter_optimize:
+            imp_fun = create_impact_func(haz_type, 
+                                 imp_fun_dict["imp_id"], 
+                                 imp_fun_dict["L"], 
+                                 imp_fun_dict["x_0"], 
+                                 imp_fun_dict["k"])
+            ifset_hail.append(imp_fun)
+    elif type_imp_fun == "lin":
+        parameter_optimize[0]["m"] = parameter[0]
+        imp_fun = create_impact_func_lin(haz_type,
+                                         parameter_optimize[0]["imp_id"], 
+                                         m = parameter[0])
         ifset_hail.append(imp_fun)
     c  = time.perf_counter()
     # print("time to make imp_fun: ", c-b)
+    
     imp = Impact()
     # imp.calc(self = imp, exposures = exp, impact_funcs = ifset_hail, hazard = haz, save_mat = True)
     imp.calc(exp, ifset_hail, haz, save_mat = False)
@@ -477,6 +602,9 @@ def make_Y(parameter, *args):
     print("time to calc impact: ", d-c)
     Y = list(imp.calc_impact_year_set(year_range = [2002, 2019]).values())
     all_eq = 0
+    
+    #very stupid bugfix. Ther where problem when all y values where 0,
+    #so this test if this is the case and changes the last value if so
     for count, y in enumerate(Y):
         if y==0:
             all_eq += 1
@@ -490,6 +618,7 @@ def make_Y(parameter, *args):
     O_norm = np.divide(Observ, min(Observ))
     # res = mean_squared_error(Y_norm, O_norm)**0.5
     rmsf = RMSF(Y_norm, O_norm)
+    rmse = mean_squared_error(O_norm, Y_norm)
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
     print("Params {}".format(parameter_optimize))
     print("The sum of the new Impact is: {}".format(sum(Y)))
@@ -499,6 +628,7 @@ def make_Y(parameter, *args):
     pears_coef, pears_p_value = stats.pearsonr(O_norm, Y_norm)   
     print("pearson for agr  (score, p_value) = ({}, {})".format(pears_coef, pears_p_value))
     print("RMSF: ", rmsf)
+    print("RMSE", rmse)
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
     # e= time.perf_counter()
     # print("time to get result: ", e-d)
@@ -508,6 +638,8 @@ def make_Y(parameter, *args):
         score = spear_coef * -1
     elif score_type == "RMSF":
         score = rmsf
+    elif score_type == "RMSE":
+        score = rmse
     return score
     
 # Set exposure: (see tutorial climada_entity_LitPop)

@@ -28,7 +28,6 @@ from scipy import optimize
 import time
 from scipy import stats
 from scipy.stats import spearmanr
-
 #%% Parameter
 # If any value in force_new_hdf5_generation is True the script will ask for 
 # user input wether to overwrite the hdf5 with the new data
@@ -47,25 +46,23 @@ name_hdf5_file={"haz_real": "haz_real.hdf5",
 plot_img = False
 haz_type = "HL"
 ev_list = ["12/07/2011", "13/07/2011"]#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
-imp_fun_infrastructure = {"imp_id": 1, "L": 0.1, "x_0": 100, "k": 10}
+imp_fun_infr_meshs = {"imp_id": 1, "L": 0.1, "x_0": 100, "k": 10}
+imp_fun_infr_dur = {"imp_id": 8, "L": 0.01, "x_0": 120, "k": 1}
 
 
-
-imp_fun_parameter = [imp_fun_infrastructure,]
+imp_fun_parameter = [imp_fun_infr_meshs,
+                     imp_fun_infr_dur]
 # Path to Data 
 input_folder = "/home/jan/Documents/ETH/Masterarbeit/input"
 results_folder = "~/Documents/ETH/Masterarbeit/results"
 years =["2002", "2003", "2004","2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018","2019"]
-years_synth = ["1979", "1980", "1981", "1982", "1983", "1984", "1985", "1986", "1987", "1988", "1989", "1990", "1991", "1992", "1993", "1994", "1995", "1996", "1997", "1998", "1999", "2000", "2001" ,"2002", "2003", "2004","2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018","2019"]
 
 
 #%% Hazard
 haz_real = fct.load_haz(force_new_hdf5_generation, "haz_real", name_hdf5_file, input_folder, years)
-haz_synth = fct.load_haz(force_new_hdf5_generation, "haz_synth", name_hdf5_file, input_folder, years_synth)
 haz_dur = fct.load_haz(force_new_hdf5_generation, "haz_dur", name_hdf5_file, input_folder, years)
 
 haz_real.check()
-haz_synth.check()
 haz_dur.check()
 
 if plot_img:
@@ -79,13 +76,6 @@ if plot_img:
     haz_dur.plot_fraction(-1)
     haz_dur.plot_intensity(-1)
     haz_dur.plot_rp_intensity(return_periods=(1, 5, 10, 20))
-    haz_synth.plot_fraction(0)
-    haz_synth.plot_intensity(0)
-    haz_synth.plot_fraction(-1)
-    haz_synth.plot_intensity(-1)
-    haz_synth.plot_rp_intensity(return_periods=(1, 5, 10, 20))
-
-
 #%% Impact_function
 # Set impact function (see tutorial climada_entity_ImpactFuncSet)
 ifset_hail = ImpactFuncSet()
@@ -95,57 +85,148 @@ for imp_fun_dict in imp_fun_parameter:
                                  imp_fun_dict["L"], 
                                  imp_fun_dict["x_0"], 
                                  imp_fun_dict["k"])
+    imp_fun.mdd[:] = 0.1
     ifset_hail.append(imp_fun)
 if plot_img:
     ifset_hail.plot()
 
 #%% Exposure
-
-exp_infr = fct.load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real)
-
+exp_infr_meshs = fct.load_exp_infr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real)
+exp_infr_dur = exp_infr_meshs.copy()
+exp_infr_dur["if_HL"] = 8 #change if_HL to match the corresponding imp_id
 if plot_img:    
-    exp_infr.plot_basemap()
-    exp_infr.plot_hexbin()
-    exp_infr.plot_scatter()
-    exp_infr.plot_raster()
+    exp_infr_meshs.plot_basemap()
+    exp_infr_meshs.plot_hexbin()
+    exp_infr_meshs.plot_scatter()
+    exp_infr_meshs.plot_raster()
 
 
 #%% Impact
-imp_infr = Impact()
-imp_infr.calc(exp_infr, ifset_hail, haz_real,save_mat=True)
+imp_infr_meshs = Impact()
+imp_infr_meshs.calc(exp_infr_meshs, ifset_hail, haz_real,save_mat=True)
 # imp_infr.plot_raster_eai_exposure()
-freq_curve_infr = imp_infr.calc_freq_curve()
+freq_curve_infr_meshs = imp_infr_meshs.calc_freq_curve()
 if plot_img:
-    freq_curve_infr.plot()
+    freq_curve_infr_meshs.plot()
+    imp_infr_meshs.plot_basemap_eai_exposure()
+    imp_infr_meshs.plot_hexbin_eai_exposure()
+    imp_infr_meshs.plot_scatter_eai_exposure()
+    imp_infr_meshs.plot_raster_eai_exposure()
+
+imp_infr_dur = Impact()
+imp_infr_dur.calc(exp_infr_dur, ifset_hail, haz_dur, save_mat=True)
+# imp_infr.plot_raster_eai_exposure()
+freq_curve_infr_dur = imp_infr_dur.calc_freq_curve()
+if plot_img:
+    freq_curve_infr_dur.plot()
+    imp_infr_dur.plot_basemap_eai_exposure()
+    imp_infr_dur.plot_hexbin_eai_exposure()
+    imp_infr_dur.plot_scatter_eai_exposure()
+    imp_infr_dur.plot_raster_eai_exposure()
+
+
+print("dmg infr meshs {} Mio CHF, dmg infr dur {} Mio CHF".format(imp_infr_meshs.aai_agg/1e6, imp_infr_dur.aai_agg/1e6))
+ifset_hail.plot()
+plt.show()
+#aai_agg for % impact
+if False:
+    plt.show()
+    imp_fun_list = np.arange(0, 0.005, 0.0001)
+    dmg_for_imp_list = []
+    for i in imp_fun_list:
+        ifset_hail = ImpactFuncSet()
+        imp_fun = fct.create_impact_func(haz_type, 
+                                     1, 
+                                     1, 
+                                     1, 
+                                     1)
+        imp_fun.mdd[:] = i
+        ifset_hail.append(imp_fun)
+        
+        imp_infr_meshs.calc(exp_infr_meshs, ifset_hail, haz_real,save_mat=False)
+        dmg_for_imp_list.append(imp_infr_meshs.aai_agg/1e6)
+        
+    plt.plot(imp_fun_list, dmg_for_imp_list, "bo")
+    plt.xlabel("% Affected Exposure")
+    plt.ylabel("aai_agg in Millions")
+    plt.title("MESHS on Infrastructure")
     plt.show()
 
-print("dmg infr {} Mio CHF".format(imp_infr.aai_agg/1e6))
+#aai_agg for each Meshs size
+if False:
+    imp_fun_list = np.arange(1, 150, 1)
+    dmg_for_imp_list = []
+    for i in imp_fun_list:
+        ifset_hail = ImpactFuncSet()
+        imp_fun = fct.create_impact_func(haz_type, 
+                                     1, 
+                                     1, 
+                                     1, 
+                                     1)
+        imp_fun.mdd[:] = 0
+        imp_fun.mdd[i] = 1.0
+        ifset_hail.append(imp_fun)
+        
+        imp_infr_meshs.calc(exp_infr_meshs, ifset_hail, haz_real,save_mat=True)
+        dmg_for_imp_list.append(imp_infr_meshs.aai_agg/1e6)
+    
+    plt.plot(imp_fun_list, dmg_for_imp_list, "bo")
+    plt.xlabel("Meshs size")
+    plt.ylabel("aai_agg in Millions")
+    plt.title("MESHS on Infrastructure")
+plt.show()
+
+#aai_agg for each Parameter
+x_tresh_list = np.arange(20, 80, 30)
+L = 1
+label = []
+for x_tresh in x_tresh_list:
+    imp_fun_param_list = np.arange(x_tresh+1, 111, 30)
+    dmg_for_imp_fun_param = []
+    for i in imp_fun_param_list:
+        y = fct.sigmoid2(np.arange(0, 150), L = L, x_0 = i, x_tresh = x_tresh)
+        ifset_hail = ImpactFuncSet()
+        imp_fun = fct.create_impact_func(haz_type, 1, 1, 1, 1, y = y)
+        ifset_hail.append(imp_fun)
+        plt.plot(y)
+        label.append("x_tresh = {}; x_half = {}".format(x_tresh, i))
+plt.title("Impfun Meshs on Infr, L = {}".format(L))
+plt.xlabel("Intensity [mm]")
+plt.ylabel("Impact [%]")
+plt.legend(labels=label)
+plt.show()
 
 
+
+
+labels = []
+for x_tresh in np.arange(20, 50, 5):
+    L = 0.01
+    x_tresh = x_tresh
+    imp_fun_param_list = np.arange(x_tresh+1, 101, 1)
+    dmg_for_imp_fun_param = []
+    for i in imp_fun_param_list:
+        y = fct.sigmoid2(np.arange(0, 150), L = L, x_0 = i, x_tresh = x_tresh)
+        ifset_hail = ImpactFuncSet()
+        imp_fun = fct.create_impact_func(haz_type, 1, 1, 1, 1, y = y)
+        ifset_hail.append(imp_fun)
+    
+        imp_infr_meshs.calc(exp_infr_meshs, ifset_hail, haz_real,save_mat=False)
+        dmg_for_imp_fun_param.append(imp_infr_meshs.aai_agg/1e6)
+    labels.append("x_tresh = {}".format(x_tresh))
+    plt.plot(imp_fun_param_list, dmg_for_imp_fun_param)
+    plt.xlabel("Imp_fun Parameter x_0 (x_half)")
+    plt.ylabel("aai_agg in Millions")
+    plt.title("MESHS on Infrastructure (L = {})".format(L))
+plt.legend(labels)
+plt.show()
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
 
+
+
+
+
 #Secret test chamber pssst
 if False:
-    print("dmg infr {} Mio CHF, dmg agr_meshs {} Mio CHF, dmg agr_dur {} Mio CHF".format(imp_infr.aai_agg/1e6, imp_agr.aai_agg/1e6, imp_agr_dur.aai_agg/1e6))
-    agr_meshs_yearly_imp = list(imp_agr.calc_impact_year_set(year_range = [2002, 2019]).values())
-    agr_dur_yearly_imp = list(imp_agr_dur.calc_impact_year_set(year_range = [2002, 2019]).values())
-    # plt.figure()
-    # plt.bar(years, agr_dur_yearly_imp)
-    # plt.show()
-    # plt.figure()
-    # plt.bar(years, agr_meshs_yearly_imp)
-    dmg_from_sturmarchiv = [27.48, 46.14, 80.67, 76.80, 32.66, 62.47, 26.30, 110.60, 13.01, 34.53, 21.50, 71.77, 22.80, 19.84, 17.50, 35.80, 24.40, 33.30]
-    dmg_from_sturmarchiv = [i*1e6 for i in dmg_from_sturmarchiv]
-    norm_agr_meshs_yearly_imp = np.divide(agr_meshs_yearly_imp, min(agr_meshs_yearly_imp))
-    norm_agr_dur_yearly_imp = np.divide(agr_dur_yearly_imp, min(agr_dur_yearly_imp))
-    norm_dmg_from_sturmarchiv = np.divide(dmg_from_sturmarchiv, min(dmg_from_sturmarchiv)) #[i / min(dmg_from_sturmarchiv) for i in dmg_from_sturmarchiv]
-    
-    #plot
-    plt.figure()
-    plt.plot(years, agr_meshs_yearly_imp)
-    plt.plot(agr_dur_yearly_imp)
-    plt.plot(dmg_from_sturmarchiv, linewidth = 3)
-    plt.legend(["meshs", "dur", "sturmarchiv"])
-    plt.xticks(rotation = 45)
-    plt.show()
+    a=3

@@ -51,20 +51,20 @@ haz_type = "HL"
 ev_list = ["12/07/2011", "13/07/2011"]#["01/07/2019", "02/07/2019", "18/08/2019", "06/08/2019", "30/06/2019", "15/06/2019"]#, "01/07/2019", "18/06/2019"]
 start_day = 0 #min = 0
 end_day = 183 #max = 183
-imp_fun_infrastructure = {"imp_id": 1, "L": 0.1, "x_0": 100, "k": 10}
-imp_fun_grape = {"imp_id": 2, "L": 0.8, "x_0": 35, "k": 10}
-imp_fun_fruit = {"imp_id": 3, "L": 1.0, "x_0": 80, "k": 10}
-imp_fun_agriculture = {"imp_id": 4, "L": 0.5, "x_0": 50, "k": 10}
-imp_fun_dur_grape = {"imp_id": 5, "L": 0.8, "x_0": 50, "k": 1}
-imp_fun_dur_fruit = {"imp_id": 6, "L": 1.0, "x_0": 50, "k": 1}
-imp_fun_dur_agriculture = {"imp_id": 7, "L": 0.5, "x_0": 50, "k": 1}
-# imp_fun_infrastructure = {"imp_id": 1, "L": 0.08, "x_0": 100, "k": 5}
-# imp_fun_grape = {"imp_id": 2, "L": 0.39, "x_0": 47, "k": 40}
-# imp_fun_fruit = {"imp_id": 3, "L": 0.88, "x_0": 67, "k": 18}
-# imp_fun_agriculture = {"imp_id": 4, "L": 0.89, "x_0": 199, "k": 32}
-# imp_fun_dur_grape = {"imp_id": 5, "L": 0.73, "x_0": 11, "k": 38}
-# imp_fun_dur_fruit = {"imp_id": 6, "L": 0.29, "x_0": 120, "k": 0}
-# imp_fun_dur_agriculture = {"imp_id": 7, "L": 0.94, "x_0": 128, "k": 31}
+# imp_fun_infrastructure = {"imp_id": 1, "L": 0.1, "x_0": 100, "k": 10}
+# imp_fun_grape = {"imp_id": 2, "L": 0.8, "x_0": 35, "k": 10}
+# imp_fun_fruit = {"imp_id": 3, "L": 1.0, "x_0": 80, "k": 10}
+# imp_fun_agriculture = {"imp_id": 4, "L": 0.5, "x_0": 50, "k": 10}
+# imp_fun_dur_grape = {"imp_id": 5, "L": 0.8, "x_0": 50, "k": 1}
+# imp_fun_dur_fruit = {"imp_id": 6, "L": 1.0, "x_0": 50, "k": 1}
+# imp_fun_dur_agriculture = {"imp_id": 7, "L": 0.5, "x_0": 50, "k": 1}
+imp_fun_infrastructure = {"imp_id": 1, "L": 0.08, "x_0": 100, "k": 5}
+imp_fun_grape = {"imp_id": 2, "L": 0.39, "x_0": 47, "k": 40}
+imp_fun_fruit = {"imp_id": 3, "L": 0.88, "x_0": 67, "k": 18}
+imp_fun_agriculture = {"imp_id": 4, "L": 0.89, "x_0": 199, "k": 32}
+imp_fun_dur_grape = {"imp_id": 5, "L": 0.73, "x_0": 11, "k": 38}
+imp_fun_dur_fruit = {"imp_id": 6, "L": 0.29, "x_0": 120, "k": 0}
+imp_fun_dur_agriculture = {"imp_id": 7, "L": 0.94, "x_0": 128, "k": 31}
 
 imp_fun_parameter = [imp_fun_infrastructure,
                      imp_fun_grape,
@@ -178,8 +178,9 @@ if True:
     coef, p_value = spearmanr(norm_dmg_from_sturmarchiv, norm_agr_dur_yearly_imp)    
     print("spearman for agr with dur (score, p_value) = ({}, {})".format(coef, p_value))
     #%% Optimization
-    optimize_type = "" # "" = no optimization, "meshs", "dur"
-    score_type = "RMSF" #["pearson", "spearman", "RMSF"]
+    optimize_type = "dur" # "" = no optimization, "meshs", "dur"
+    score_type = "RMSE" #["pearson", "spearman", "RMSF"]
+    type_imp_fun = "lin" #["sig", "lin"]
     if optimize_type != "":
         num_fct = 1 #[1:3]
         init_parameter=[]
@@ -200,16 +201,21 @@ if True:
             
         if num_fct == 1:
             exp["if_HL"] = parameter_optimize[0]["imp_id"]
-        args = (parameter_optimize, exp, haz, haz_type, num_fct, score_type)
+        if type_imp_fun == "lin":
+            bounds = [(0.01,0.03)]
+            imp_fun_lin = {"imp_id": 9, "m": 0.1, "q": 0}
+            parameter_optimize = [imp_fun_lin]
+            exp.if_HL = 9
+        args = (parameter_optimize, exp, haz, haz_type, num_fct, score_type, type_imp_fun)
         # optimize_results = optimize.differential_evolution(func=fct.make_Y, bounds = bounds, args = args, workers = 3)
-        optimize_results = optimize.brute(func = fct.make_Y, ranges = bounds, args = args, Ns = 7, full_output=True)
+        optimize_results = optimize.brute(func = fct.make_Y, ranges = bounds, args = args, Ns = 500, full_output=True)
         # optimize_results = optimize.minimize(fun = fct.make_Y, x0 = init_parameter,method="Powell", args = args, bounds = bounds)
         # test = fct.make_Y(init_parameter, args)
         print(optimize_results)
         print(score_type)
         print(optimize_type)
 
-test_if_ranges_make_sense = False
+test_if_ranges_make_sense = True
 if test_if_ranges_make_sense:
     plt.Figure()
     x = np.arange(0, 120,1)
@@ -227,3 +233,29 @@ if test_if_ranges_make_sense:
     plt.show()
 # imp_agr.plot_raster_eai_exposure(raster_res = 0.008333333333325754)
     #%% WICHTIG: WIESO IST haz_hail.intensity_thresh = 10?????????????
+
+#Test Results:
+# Linear:
+imp_fun = fct.create_impact_func_lin(haz_type, 9, m=0.010819)
+ifset_hail2 = ImpactFuncSet()
+ifset_hail2.append(imp_fun)
+
+exp_dur2 = exp_dur
+exp_dur2.if_HL = 9
+
+imp_agr_dur2 = Impact()
+imp_agr_dur2.calc(exp_dur2, ifset_hail2, haz_dur, save_mat = True)
+freq_curve_agr2 = imp_agr.calc_freq_curve()
+freq_curve_agr2.plot()
+plt.show()
+
+agr_dur_yearly_imp2 = list(imp_agr_dur2.calc_impact_year_set(year_range = [2002, 2019]).values())
+
+plt.figure()
+plt.plot(agr_dur_yearly_imp2)
+plt.plot(dmg_from_sturmarchiv, linewidth = 3)
+plt.legend(["dur_lin", "sturmarchiv"])
+plt.xticks(rotation = 45)
+plt.show()
+
+

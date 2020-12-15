@@ -72,7 +72,7 @@ years_synth = ["1979", "1980", "1981", "1982", "1983", "1984", "1985", "1986", "
 haz_real = fct.load_haz(force_new_hdf5_generation, "haz_real", name_hdf5_file, input_folder, years)
 # haz_synth = fct.load_haz(force_new_hdf5_generation, "haz_synth", name_hdf5_file, input_folder, years_synth)
 haz_dur = fct.load_haz(force_new_hdf5_generation, "haz_dur", name_hdf5_file, input_folder, years)
-
+haz_dur.intensity = haz_dur.intensity.astype(dtype = int)
 haz_real.check()
 # haz_synth.check()
 if plot_img:
@@ -86,8 +86,29 @@ if plot_img:
     haz_dur.plot_fraction(-1)
     haz_dur.plot_intensity(-1)
     haz_dur.plot_rp_intensity(return_periods=(1, 5, 10, 20))
-
-#%% Impact_function
+#hist:
+hist_dur = np.array([])
+hist_meshs = np.array([])
+for i in range(3294):
+    hist_dur_temp = np.array(haz_dur.intensity[i].todense())[0]
+    hist_dur_temp = hist_dur_temp[(hist_dur_temp != 0) & (hist_dur_temp <= 151)]
+    hist_dur = np.append(hist_dur, hist_dur_temp)
+    hist_meshs_temp = np.array(haz_real.intensity[i].todense())[0]
+    hist_meshs_temp = hist_meshs_temp[(hist_meshs_temp != 0) & (hist_meshs_temp <= 151)]
+    hist_meshs = np.append(hist_meshs, hist_meshs_temp)
+# unique, counts = np.unique(hist_dur, return_counts=True)
+# frequencies = np.asarray((unique, counts)).T
+fig, axs = plt.subplots(1,2, sharey=False, tight_layout = False)
+fig.suptitle("Histogramm Intensity for 2002-2019")
+axs[1].hist(hist_dur, bins = 44)
+axs[1].set(xlabel = "Duration [min]", ylabel = "frequency")
+plt.xlabel("duration [min]")
+plt.ylabel("frequency")
+axs[0].hist(hist_meshs, bins = 125)
+axs[0].set(xlabel = "MESHS [mm]", ylabel = "frequency")
+fig.subplots_adjust(wspace = 0.35)
+plt.show()
+#%% Impact_functionse
 # Set impact function (see tutorial climada_entity_ImpactFuncSet)
 ifset_hail = ImpactFuncSet()
 for imp_fun_dict in imp_fun_parameter:
@@ -101,7 +122,6 @@ if plot_img:
     ifset_hail.plot()
 
 #%% Exposure
-
 exp_meshs = fct.load_exp_agr(force_new_hdf5_generation, name_hdf5_file, input_folder, haz_real)
 exp_dur = exp_meshs.copy()
 exp_dur["if_HL"] = exp_dur["if_HL"]+3 #change if_HL to match the corresponding imp_id
@@ -138,6 +158,11 @@ print("dmg agr_meshs {} Mio CHF, dmg agr_dur {} Mio CHF".format(imp_agr_meshs.aa
 
 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print("I'm done with the script")
+
+
+
+
+
 
 #Secret test chamber pssst
 if False:
