@@ -116,7 +116,8 @@ for imp_fun_dict in imp_fun_parameter:
                                  imp_fun_dict["imp_id"], 
                                  imp_fun_dict["L"], 
                                  imp_fun_dict["x_0"], 
-                                 imp_fun_dict["k"])
+                                 imp_fun_dict["k"],
+                                 y = None)
     ifset_hail.append(imp_fun)
 if plot_img:
     ifset_hail.plot()

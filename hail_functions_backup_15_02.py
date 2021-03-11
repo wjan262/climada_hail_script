@@ -428,23 +428,6 @@ def mdd_function_sigmoid(imp_id, max_y=0.1, start_sig = 0, width=100, plot_y = F
         plt.plot(y)
     return y
 
-def imp_fun_class_mult(x, p1, p2, p3, p4, p5):
-    y = np.zeros(len(x))
-    y[20:30] = p1
-    y[30:40] = p1*2**p2
-    y[40:50] = p1*2**p2*2**p3
-    y[50:60] = p1*2**p2*2**p3*2**p4
-    y[60:] = p1*2**p2*2**p3*2**p4*2**p5
-    return y
-
-def imp_fun_class(x, p1, p2, p3, p4, p5):
-    y = np.zeros(len(x))
-    y[20:30] = p1
-    y[30:40] = p2
-    y[40:50] = p3
-    y[50:60] = p4
-    y[60:] = p5
-    return y
 def sigmoid(x, L, x_0, k):
     """
     Create sigmoid function for Impact function
@@ -552,7 +535,6 @@ def RMSE(X, Y):
     res = np.exp((res/len(X))**(1/2))
     return res
 
-
 def make_Y(parameter, *args):
     """
     Score function for Optimization process. 
@@ -580,12 +562,8 @@ def make_Y(parameter, *args):
     """
     # *args = imp_fun_parameter, exp, agr, haz_type
     # a = time.perf_counter()
-    parameter_optimize, exp, haz, haz_type, num_fct, score_type, type_imp_fun, sector, norm, class_mult, optimize_type = args
+    parameter_optimize, exp, haz, haz_type, num_fct, score_type, type_imp_fun = args
     ifset_hail = ImpactFuncSet()
-    if optimize_type == "meshs":
-        num = 150
-    if optimize_type == "dur":
-        num = 120
     if type_imp_fun == "sig":
         if num_fct ==1:
             parameter_optimize[0]["L"] = parameter[0]
@@ -616,40 +594,6 @@ def make_Y(parameter, *args):
                                          parameter_optimize[0]["imp_id"], 
                                          m = parameter[0])
         ifset_hail.append(imp_fun)
-    elif type_imp_fun =="class":
-        parameter_optimize = parameter
-        if class_mult:
-            y = imp_fun_class_mult(np.arange(num),
-                              parameter[0],
-                              parameter[1],
-                              parameter[2],
-                              parameter[3],
-                              parameter[4])
-        else:
-            y = imp_fun_class(np.arange(num),
-                              parameter[0],
-                              parameter[1],
-                              parameter[2],
-                              parameter[3],
-                              parameter[4])            
-        imp_fun = create_impact_func(haz_type, 
-                                         1,
-                                         0,
-                                         0,
-                                         0,
-                                         y=y)
-        ifset_hail.append(imp_fun)
-    elif type_imp_fun == "const":
-        parameter_optimize[0]["y_const"] = parameter
-        y = np.zeros(num)
-        y[:] = parameter[0]
-        imp_fun = create_impact_func(haz_type,
-                                     imp_id = parameter_optimize[0]["imp_id"],
-                                     L=0,
-                                     x_0=0,
-                                     k=0,
-                                     y=y)
-        ifset_hail.append(imp_fun)
     c  = time.perf_counter()
     # print("time to make imp_fun: ", c-b)
     
@@ -658,39 +602,32 @@ def make_Y(parameter, *args):
     imp.calc(exp, ifset_hail, haz, save_mat = False)
     d = time.perf_counter()
     print("time to calc impact: ", d-c)
-    Y_org = list(imp.calc_impact_year_set(year_range = [2002, 2019]).values())
+    Y = list(imp.calc_impact_year_set(year_range = [2002, 2019]).values())
     all_eq = 0
     
     #very stupid bugfix. Ther where problem when all y values where 0,
     #so this test if this is the case and changes the last value if so
-    for count, y in enumerate(Y_org):
+    for count, y in enumerate(Y):
         if y==0:
             all_eq += 1
-            Y_org[count] = 0.1
-    if all_eq == len(Y_org):
-        Y_org[-1] = 0.2
+            Y[count] = 0.1
+    if all_eq == len(Y):
+        Y[-1] = 0.2
             
-    if sector == "agr":
-        Observ = [29.12, 48.61, 84.34, 79.35, 33.37, 63.40, 26.05, 110.06, 12.87, 34.05, 21.35, 71.41, 22.71, 19.98, 17.69, 35.39, 24.30, 33.07]
-    elif sector == "infr":
-        Observ = [164.27, 32.35, 101.18, 169.90, 26.60, 31.00, 17.66, 311.96, 14.96, 237.43 , 76.12, 188.37, 8.98, 25.60, 17.15, 60.80, 29.50, 16.55]
-    Observ = [i*1e6 for i in Observ]
-    if norm:
-        O = np.divide(Observ, min(Observ))
-        Y = np.divide(Y_org, min(Y_org))
-    else:
-        O = Observ
-        Y = Y_org
+    Y_norm = np.divide(Y, min(Y))
+    Observ = [27.48, 46.14, 80.67, 76.80, 32.66, 62.47, 26.30, 110.60, 13.01,
+              34.53, 21.50, 71.77, 22.80, 19.84, 17.50, 35.80, 24.40, 33.30]
+    O_norm = np.divide(Observ, min(Observ))
     # res = mean_squared_error(Y_norm, O_norm)**0.5
-    rmsf = RMSF(Y, O)
-    rmse = mean_squared_error(O, Y)
+    rmsf = RMSF(Y_norm, O_norm)
+    rmse = mean_squared_error(O_norm, Y_norm)
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
     print("Params {}".format(parameter_optimize))
-    print("The sum of the new Impact is: {:.2e}".format(sum(Y_org)))
-    spear_coef, spear_p_value = spearmanr(O, Y)    
+    print("The sum of the new Impact is: {}".format(sum(Y)))
+    spear_coef, spear_p_value = spearmanr(O_norm, Y_norm)    
     print("spearman for agr  (score, p_value) = ({}, {})".format(spear_coef, spear_p_value))
 
-    pears_coef, pears_p_value = stats.pearsonr(O, Y)   
+    pears_coef, pears_p_value = stats.pearsonr(O_norm, Y_norm)   
     print("pearson for agr  (score, p_value) = ({}, {})".format(pears_coef, pears_p_value))
     print("RMSF: ", rmsf)
     print("RMSE", rmse)

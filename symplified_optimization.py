@@ -116,24 +116,7 @@ if plot_img:
     #exp_agr.plot_basemap() 
 
 #%% Impact
-imp_infr = Impact()
-imp_infr.calc(exp_infr, ifset_hail, haz_real,save_mat=True)
-# imp_infr.plot_raster_eai_exposure()
-freq_curve_infr = imp_infr.calc_freq_curve()
-freq_curve_infr.plot()
-plt.show()
 
-imp_agr = Impact()
-imp_agr.calc(exp_meshs, ifset_hail, haz_real, save_mat = True)
-freq_curve_agr = imp_agr.calc_freq_curve()
-freq_curve_agr.plot()
-plt.show()
-
-imp_agr_dur = Impact()
-imp_agr_dur.calc(exp_dur, ifset_hail, haz_dur, save_mat = True)
-freq_curve_agr = imp_agr.calc_freq_curve()
-freq_curve_agr.plot()
-plt.show()
 
 # for ev_name in ev_list:
 #     imp_infr.plot_basemap_impact_exposure(event_id = haz_real.get_event_id(event_name=ev_name)[0])
@@ -146,7 +129,7 @@ print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 print("I'm done with the script")
 
 #Secret test chamber pssst
-if True:
+if False:
     print("dmg infr {} Mio CHF, dmg agr_meshs {} Mio CHF, dmg agr_dur {} Mio CHF".format(imp_infr.aai_agg/1e6, imp_agr.aai_agg/1e6, imp_agr_dur.aai_agg/1e6))
     agr_meshs_yearly_imp = list(imp_agr.calc_impact_year_set(year_range = [2002, 2019]).values())
     agr_dur_yearly_imp = list(imp_agr_dur.calc_impact_year_set(year_range = [2002, 2019]).values())
@@ -179,10 +162,31 @@ if True:
     print("spearman for agr with meshs (score, p_value) = ({}, {})".format(coef, p_value))
     coef, p_value = spearmanr(norm_dmg_from_sturmarchiv, norm_agr_dur_yearly_imp)    
     print("spearman for agr with dur (score, p_value) = ({}, {})".format(coef, p_value))
-    #%% Optimization
+#%% Optimization
+#create linear space for brute
+lin_space = [0.1, 0,2, 0.3, 0.4]
+
+def simp_opt(haz, exp, type_imp_fun, lin_space):
+    for i in lin_space:
+        #create new imp_fun with parameter
+        
+        
+        #calculate impact
+        imp = Impact()
+        imp.calc(exp, imp_fun, haz)
+    
+        #save results
+        
+        
+        
+    return results
+
+
+
+
     optimize_results = [2.2e-05, 1.8e+00, 0.0e+00, 3.0e-01]
     sector = "infr" # ["infr", "agr"]
-    optimize_type = "dur" # "" = no optimization, "meshs", "dur"
+    optimize_type = "meshs" # "" = no optimization, "meshs", "dur"
     score_type = "RMSF" #["pearson", "spearman", "RMSF"]
     type_imp_fun = "const" #["sig", "lin", "class", "const"]
     norm = False
