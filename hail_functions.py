@@ -218,7 +218,7 @@ def create_impact_func_lin(haz_type, imp_id, m, q = 0):
             7: "Hail (duration) on agriculture (without fruits and grape production",
             8: "Hail (duration) on infrastructure",
             9: "Hail (duration) on agriculture (fruit + grape + rest)",
-            10: "Hail (Meshs) on agriculture (fruit + grape + rest="
+            10: "Hail (Meshs) on agriculture (fruit + grape + rest)"
             }
     imp_fun= ImpactFunc() 
     imp_fun.haz_type = haz_type
@@ -437,13 +437,34 @@ def imp_fun_class_mult(x, p1, p2, p3, p4, p5):
     y[60:] = p1*2**p2*2**p3*2**p4*2**p5
     return y
 
-def imp_fun_class(x, p1, p2, p3, p4, p5):
+def imp_fun_class(x, p1, p2, p3, p4, p5, p6, p7):
     y = np.zeros(len(x))
-    y[20:30] = p1
-    y[30:40] = p2
-    y[40:50] = p3
-    y[50:60] = p4
-    y[60:] = p5
+    #test for workarround
+    a=0
+    if p1:
+        y[20:30] = p1
+        a+= 1
+    if p2:
+        y[25:40] = p2
+        a+= 1
+    if p3:
+        y[30:50] = p3
+        a+= 1
+    if p4:
+        y[40:60] = p4
+        a+= 1
+    if p5:
+        y[50:75] = p5
+        a+= 1
+    if p6:
+        y[60:90] = p6
+        a+= 1
+    if p7:
+        y[80:] = p7
+        a+= 1
+    if a>1:
+        print("something is wrong")
+        a=this_variable_does_not_exist
     return y
 def sigmoid(x, L, x_0, k):
     """
@@ -631,7 +652,9 @@ def make_Y(parameter, *args):
                               parameter[1],
                               parameter[2],
                               parameter[3],
-                              parameter[4])            
+                              parameter[4],
+                              parameter[5],
+                              parameter[6])            
         imp_fun = create_impact_func(haz_type, 
                                          1,
                                          0,

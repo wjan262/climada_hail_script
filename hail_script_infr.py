@@ -139,7 +139,7 @@ print("dmg infr meshs {} Mio CHF, dmg infr dur {} Mio CHF".format(imp_infr_meshs
 #ifset_hail.plot()
 #plt.show()
 #aai_agg for % impact
-if False:
+if True:
     plt.show()
     imp_fun_list = np.arange(0, 0.005, 0.0001)
     dmg_for_imp_list = []
